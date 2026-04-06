@@ -13,9 +13,9 @@
 #    Em vez de estimar um VAR gigante e iterar os coeficientes (o que acumula erros),
 #    as Projeções Locais estimam uma regressão direta para cada horizonte h:
 #    $y_{t+h} = \alpha_h + \beta_h X_t + \epsilon_{t+h}$
-#    O coeficiente $\beta_h$ é exatamente a resposta ao impulso no horizonte h.
+#    O coeficiente $\beta_h$ é a resposta ao impulso no horizonte h.
 #
-# 3. Inovação do Coulombe (TVP-Ridge):
+# 3. 2SRR do Coulombe (TVP-Ridge):
 #    Aqui, aplicamos a Ridge Regression com Parâmetros Variando no Tempo (TVP). 
 #    Isso significa que o nosso $\beta_h$ ganha um subscrito t ($\beta_{h,t}$). 
 #    Isso nos permite ver, por exemplo, se a inflação responde de forma diferente a um 
@@ -116,9 +116,8 @@ for(v in 1:length(targets)) {
   for(h in 1:H) {
     Ymat[, h] <- Y_target[(1 + h):(nrow(df) - H + h)]
   }
-  
-  # Heurística do Coulombe: 
-  # Para poupar poder computacional, ele estima um Lambda base via Regressão Lasso 
+   
+  # Para poupar poder computacional, Coulombe estima um Lambda base via Lasso 
   # simples (sem TVP) para usar como âncora nos modelos dinâmicos.
   cvvec = c()
   for(h in 1:H){
@@ -139,7 +138,6 @@ for(v in 1:length(targets)) {
       out <- TVPRR_cosso(X=Xmat, y=Ymat[,h], type=2, lambdavec=lambdavec, 
                          lambda2=lambda2_base, kfold=5, silent=1)
       
-      # O PULO DO GATO: Extraindo o Beta do Choque
       # A matriz de betas gerada tem dimensão [equação, variável explicativa, tempo].
       # Nós queremos extrair APENAS a linha referente à variável 'shock_var' (ex: SPREAD).
       # Somamos +1 ao 'shock_pos' porque a primeira coluna da matriz de betas é sempre o intercepto ($\alpha$).
