@@ -32,7 +32,7 @@
 rm(list = ls()) # Limpa o ambiente
 
 # Define o diretório de trabalho
-wd = 'C:/Users/felip/OneDrive/Documentos/Felipe_Dornelles_tcc'
+wd = 'C:/Users/felip/OneDrive/Documentos/tcc/Felipe_Dornelles_tcc'
 setwd(wd)
 
 paths <- list(program = "00_program",
