@@ -132,3 +132,31 @@ export_latex_table(rmspe_data, UNRATE, paths$results)
 cat("\nEvaluation complete! LaTeX tables saved to 40_results folder.\n")
 print(rmspe_data)
 
+# Criando a imagem do gráfico
+plot_rmspe <- ggplot(rmspe_data, aes(x = as.factor(horizon), y = RMSPE, group = variable, color = variable)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 4) +
+  scale_color_npg() +
+  labs(title = "Erro Quadrático Médio de Previsão (RMSPE)",
+       subtitle = "Avaliação do modelo Coulombe 2SRR por horizonte preditivo",
+       x = "Horizonte de Previsão (Meses)",
+       y = "RMSPE",
+       color = "Variável Alvo") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        legend.position = "bottom",
+        legend.title = element_text(face = "bold"))
+
+# Visualizar o gráfico na sua tela
+print(plot_rmspe)
+
+# Salvar a imagem em alta resolução (PNG) na sua pasta 40_results
+ggsave(filename = paste(paths$results, "grafico_RMSPE_Coulombe.png", sep = "/"), 
+       plot = plot_rmspe, 
+       width = 8, 
+       height = 5, 
+       dpi = 300, 
+       bg = "white")
+
+cat("\nImagem gerada e salva com sucesso na pasta 40_results!\n")
+
