@@ -1,0 +1,5 @@
+"variable","horizonte","n_breaks","break_dates"
+"PRECOS12_IPCA12",1,3,"abr/1999; dez/2002; ago/2013"
+"PRECOS12_IPCA12",3,5,"abr/1999; ago/2002; dez/2005; abr/2009; fev/2013"
+"PRECOS12_IPCA12",6,4,"set/2001; set/2007; jan/2011; mai/2014"
+"PRECOS12_IPCA12",12,4,"ago/1999; dez/2002; abr/2006; ago/2009"

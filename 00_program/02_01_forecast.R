@@ -255,3 +255,88 @@ saveRDS(actual_values,
 
 cat(sprintf("\nForecast completo. %d combinacoes (var x horizonte) salvas em 30_output/\n",
             length(forecasts_list)))
+
+# =============================================================================================================
+# CHECKUPS
+# =============================================================================================================
+
+# MSFE, RMSFE e MAE para cada combinação (variável x horizonte) para tabela base
+
+forecasts <- readRDS(paste(paths$output, "coulombe_2srr.rds", sep = "/"))
+actual    <- readRDS(paste(paths$output, "actual_values.rds",  sep = "/"))
+
+results <- do.call(rbind, lapply(forecasts, function(f) {
+  act  <- actual[, f$variable]
+  # alinha: pred[i] é previsão h passos à frente do passo i
+  n    <- min(length(f$pred), length(act))
+  err  <- f$pred[1:n] - act[1:n]
+  data.frame(
+    variable = f$variable,
+    horizon  = f$horizon,
+    MSFE     = mean(err^2, na.rm = TRUE),
+    RMSFE    = sqrt(mean(err^2, na.rm = TRUE)),
+    MAE      = mean(abs(err), na.rm = TRUE)
+  )
+}))
+
+print(results, digits = 4)
+
+# Benchmark: Random Walk
+
+rw_results <- do.call(rbind, lapply(forecasts, function(f) {
+  act <- actual[, f$variable]
+  h   <- f$horizon
+  n   <- length(act)
+  
+  # random walk: previsão é o último valor observado antes da janela OOS
+  # act está em escala padronizada, então RW pred = act[t], target = act[t+h]
+  rw_pred <- head(act, n - h)
+  rw_act  <- tail(act, n - h)
+  rw_err  <- rw_pred - rw_act
+  
+  data.frame(
+    variable = f$variable,
+    horizon  = f$horizon,
+    MSFE_RW  = mean(rw_err^2, na.rm = TRUE)
+  )
+}))
+
+# MSFE relativo ao RW (< 1 = bate o benchmark)
+results_rel <- merge(results, rw_results, by = c("variable", "horizon"))
+results_rel$MSFE_rel <- results_rel$MSFE / results_rel$MSFE_RW
+
+print(results_rel[, c("variable","horizon","MSFE","MSFE_RW","MSFE_rel","RMSFE")],
+      digits = 4)
+
+# MSFE_rel < 1 significa que o 2SRR bate o random walk — que é o resultado esperado para IPCA e EMBI em horizontes curtos (h=1,3) e mais incerto para h=12. Cole o output aqui para interpretar os resultados finais.
+
+# Teste Diebold-Mariano para comparar MSFE do 2SRR com o RW
+
+library(forecast)
+
+dm_results <- do.call(rbind, lapply(forecasts, function(f) {
+  act  <- actual[, f$variable]
+  h    <- f$horizon
+  n    <- min(length(f$pred), length(act))
+
+  e1   <- f$pred[1:n] - act[1:n]          # erro 2SRR
+  rw   <- head(act, n - h + 0)            # RW: pred = valor anterior
+  # alinha RW com o mesmo n
+  e2   <- head(act, n) - c(NA, head(act, n-1))
+  e2[1] <- 0
+
+  dm <- tryCatch(
+    dm.test(e1, e2, alternative = "less", h = h, power = 2),
+    error = function(e) NULL
+  )
+
+  data.frame(
+    variable  = f$variable,
+    horizon   = h,
+    MSFE_rel  = mean(e1^2, na.rm=TRUE) / mean(e2^2, na.rm=TRUE),
+    DM_stat   = if (!is.null(dm)) dm$statistic else NA,
+    p_value   = if (!is.null(dm)) dm$p.value   else NA
+  )
+}))
+
+print(dm_results, digits = 3)

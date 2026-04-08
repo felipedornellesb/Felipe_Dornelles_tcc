@@ -1,0 +1,5 @@
+"variable","horizonte","n_breaks","break_dates"
+"JPM366_EMBI366",1,3,"abr/1999; ago/2002; fev/2007"
+"JPM366_EMBI366",3,4,"abr/1999; ago/2002; jan/2008; nov/2013"
+"JPM366_EMBI366",6,4,"out/1999; jul/2007; nov/2010; mar/2014"
+"JPM366_EMBI366",12,4,"set/2000; jul/2007; jul/2011; nov/2014"
