@@ -1,3 +1,6 @@
+# projeto com série de erros em cascata. 
+# ipea deu ruim. Rever. .
+
 # ============================================================
 # 01_data_download.R
 #
