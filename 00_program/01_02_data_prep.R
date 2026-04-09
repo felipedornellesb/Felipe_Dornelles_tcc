@@ -2,6 +2,7 @@
 # 01_data_download.R
 #
 # Montagem de séries macroeconômicas brasileiras
+# com mais dados, de modo a similarizar com o Coulombe, mas
 # para usar no modelo TVP-2SRR, seguindo a lógica da Nathalia:
 #   - targets (V1..V5): variáveis que quero prever
 #   - painel auxiliar: séries que viram fatores PCA (os M's)
@@ -11,9 +12,7 @@
 #   - BCB via {GetBCBData} (desemprego PME 1996–2011)
 # ============================================================
 
-# =============================================================================================================
-# PACKAGE MANAGEMENT
-# =============================================================================================================
+rm(list = ls())
 
 myPKGs <- c('dplyr', 'ipeadatar', 'readxl', 'lubridate', 'urca', 'tidyr', 'tseries')
 
@@ -23,8 +22,6 @@ if (length(InstallThesePKGs) > 0)
   install.packages(InstallThesePKGs, repos = "http://cran.us.r-project.org")
 
 invisible(lapply(myPKGs, library, character.only = TRUE))
-
-source(paste(paths$functions, '00_Nathalia_functions.R', sep = '/'))
 
 library(ipeadatar)
 library(GetBCBData)
@@ -38,6 +35,7 @@ library(zoo)
 # ============================================================
 
 wd <- "C:/Users/felip/OneDrive/Documentos/tcc/Felipe_Dornelles_tcc/"
+
 setwd(wd)
 
 paths <- list(
@@ -425,4 +423,3 @@ cat(sprintf("  df_wide.rda     -> %d raw series\n",         ncol(df_wide) - 1))
 cat(sprintf("  df_transf.rda   -> %d transformed series\n", ncol(df_transf) - 1))
 cat("  targets_br.rda  -> 5 targets (V1..V5)\n")
 cat("  all_options.rda -> 60 combinations M x V x H\n")
-
