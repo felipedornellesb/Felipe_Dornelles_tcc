@@ -20,7 +20,7 @@ invisible(lapply(myPKGs, library, character.only = TRUE))
 # SETUP — working directory, paths e pasta datada
 # ============================================================
 
-wd <- "C:/Users/00341048/Downloads/Felipe_Dornelles_tcc-main/Felipe_Dornelles_tcc-main/"
+wd <- "C:/Users/felip/OneDrive/Documentos/tcc/Felipe_Dornelles_tcc/"
 setwd(wd)
 
 paths <- list(
