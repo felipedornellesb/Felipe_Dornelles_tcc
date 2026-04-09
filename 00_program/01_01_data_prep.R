@@ -1,12 +1,10 @@
 # =============================================================================================================
 # 01_DATA_PREP.R
-# Correções aplicadas:
-#   [BUG 1] dataset$transform -> dataset$transformation
-#   [BUG 2] non_stationary <- df_filtered (não df)
-#   [BUG 3] remoção de burn-in dinâmica com slice()
-#   [BUG 4] código duplicado removido
-#   [BUG 5] date vira list-column após pivot_wider -> forçar as.Date() imediatamente
-#   [BUG 6] df_sorted usava format = "%Y/%m/%d" desnecessário -> removido
+# Descrição: Preparação dos mesmos dados analisados por Nathalia em seu TCC, para uso em análises subsequentes
+# - Prepara os dados para análise, incluindo:
+# - Importação e limpeza dos dados
+# - Testes de estacionariedade e transformações necessárias para cada série
+# - Exportação do dataset final para uso em análises subsequentes 
 # =============================================================================================================
 
 rm(list = ls())

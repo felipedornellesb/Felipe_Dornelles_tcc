@@ -19,7 +19,7 @@ paths <- list(
   tools     = "20_tools",
   functions = "20_tools/functions",
   output    = "30_output",
-  results   = file.path("40_results", "40_analysis",
+  results   = file.path("40_results", "analysis",
                         paste0("results_", format(Sys.Date(), "%d_%m_%Y_%H")))
 )
 
@@ -79,7 +79,7 @@ theme_tcc <- function(base_size = 12) {
     )
 }
 
-# R² fora da amostra (Campbell & Thompson 2008)
+# R² fora da amostra (Campbell & Thompson 2008) (A Monteiro · 2020)
 oos_r2 <- function(actual, pred, benchmark) {
   msfe_model <- mean((actual - pred)^2,      na.rm = TRUE)
   msfe_bench <- mean((actual - benchmark)^2, na.rm = TRUE)
