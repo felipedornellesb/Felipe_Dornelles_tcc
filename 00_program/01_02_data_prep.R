@@ -1,5 +1,5 @@
 # ============================================================
-# 10_data_download.R
+# 01_data_download.R
 #
 # Montagem de séries macroeconômicas brasileiras
 # para usar no modelo TVP-2SRR, seguindo a lógica da Nathalia:
@@ -10,6 +10,21 @@
 #   - IPEADATA via {ipeadatar} (maioria das séries)
 #   - BCB via {GetBCBData} (desemprego PME 1996–2011)
 # ============================================================
+
+# =============================================================================================================
+# PACKAGE MANAGEMENT
+# =============================================================================================================
+
+myPKGs <- c('dplyr', 'ipeadatar', 'readxl', 'lubridate', 'urca', 'tidyr', 'tseries')
+
+InstalledPKGs      <- names(installed.packages()[, 'Package'])
+InstallThesePKGs   <- myPKGs[!myPKGs %in% InstalledPKGs]
+if (length(InstallThesePKGs) > 0)
+  install.packages(InstallThesePKGs, repos = "http://cran.us.r-project.org")
+
+invisible(lapply(myPKGs, library, character.only = TRUE))
+
+source(paste(paths$functions, '00_Nathalia_functions.R', sep = '/'))
 
 library(ipeadatar)
 library(GetBCBData)
