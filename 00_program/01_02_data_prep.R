@@ -575,4 +575,3 @@ cat("  targets_br.rda         -> 5 targets (V1..V5)\n")
 cat("  all_options.rda        -> 60 combinations M x V x H\n")
 cat("  series_status.csv      -> quality report\n")
 cat("  dropped_status.csv     -> dropped series log\n")
-
