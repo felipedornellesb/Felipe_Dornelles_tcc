@@ -648,3 +648,4 @@ cat("  fig6 — R² in-sample: OLS vs Ridge vs TVP\n")
 cat("  fig7 — MSFE relativo TVP vs benchmarks\n")
 cat("  fig8 — Painel resumo 2×2\n")
 cat(strrep("=", 60), "\n")
+

@@ -1,19 +1,14 @@
 # ============================================================
 # 02_FORECAST.R
 #
-# Roda o modelo TVP-2SRR (Coulombe 2022) em janela expandida
-# para todas as combinações variable × horizon definidas no
-# grid all_options carregado do 00_data_download.R.
-#
-# Inputs  (de 10_data/data_MM_DD_YYYY/):
-#   df_transf.rda   → painel transformado e estacionário
-#   targets_br.rda  → lista V1..V5 com nomes das variáveis
-#   all_options.rda → grid M × V × H (60 combinações)
-#
-# Outputs (em 30_output/):
-#   coulombe_2srr.rds   → lista com previsões por var × h
-#   actual_values.rds   → matriz de valores realizados
-#   results_summary.rds → MSFE, RMSFE, MAE, DM vs RW
+# Forecast TVP-2SRR adaptado ao 01_data_prep.R do projeto.
+# Versão enxuta para a base brasileira:
+#   - usa df_model.rda (base final limpa)
+#   - usa df_targets.rda e df_panel_pca.rda quando disponíveis
+#   - sem dataprep exagerado
+#   - lags curtos (1:3)
+#   - poucos fatores (K = 1:3)
+#   - janela inicial definida pela amostra disponível
 # ============================================================
 
 rm(list = ls())
@@ -34,9 +29,8 @@ paths <- list(
   results   = "40_results"
 )
 
-# Pasta datada dentro de 30_output/ — ex.: 30_output/outputs_04_08_2026/
-run_date    <- format(Sys.Date(), "%m_%d_%Y")
-output_run  <- file.path(paths$output, paste0("outputs_", run_date))
+run_date   <- format(Sys.Date(), "%m_%d_%Y")
+output_run <- file.path(paths$output, paste0("outputs_", run_date))
 
 for (p in c(paths$output, output_run, paths$results)) {
   if (!dir.exists(p)) dir.create(p, recursive = TRUE)
@@ -48,235 +42,246 @@ cat(sprintf("Output folder: %s\n", output_run))
 # PACKAGES
 # ============================================================
 
-myPKGs <- c("dplyr", "randomForest", "mboost", "e1071", "readr",
-            "pracma", "glmnet", "fGarch", "matrixcalc", "forecast")
+myPKGs <- c("dplyr", "pracma", "forecast", "MTS", "matrixcalc", "fGarch")
 
 InstalledPKGs    <- names(installed.packages()[, "Package"])
 InstallThesePKGs <- myPKGs[!myPKGs %in% InstalledPKGs]
 if (length(InstallThesePKGs) > 0)
   install.packages(InstallThesePKGs, repos = "http://cran.us.r-project.org")
+
 invisible(lapply(myPKGs, library, character.only = TRUE))
 
 # ============================================================
-# LOAD TOOLS & FUNCTIONS
+# LOAD FUNCTIONS
 # ============================================================
 
-source(file.path(paths$functions, "00_Nathalia_functions.R"))
 source(file.path(paths$functions, "MV2SRR_v221103.R"))
 
 # ============================================================
-# CARREGA DADOS DO RUN MAIS RECENTE EM 10_data/
-# ------------------------------------------------------------
-# Sempre usa a pasta data_MM_DD_YYYY mais recente disponível,
-# evitando hardcodar a data. Se quiser fixar uma data
-# específica, substitua por:
-#   run_folder <- "10_data/data_04_08_2026"
+# LOAD LATEST DATA RUN
 # ============================================================
 
 data_subfolders <- list.dirs(paths$data, recursive = FALSE, full.names = TRUE)
 data_subfolders <- data_subfolders[grepl("data_\\d{2}_\\d{2}_\\d{4}$",
                                          basename(data_subfolders))]
 
-if (length(data_subfolders) == 0)
-  stop("Nenhuma pasta data_MM_DD_YYYY encontrada em 10_data/. Rode o 00_data_download.R primeiro.")
+if (length(data_subfolders) == 0) {
+  stop("Nenhuma pasta data_MM_DD_YYYY encontrada em 10_data/. Rode o 01_data_prep.R primeiro.")
+}
 
-run_folder <- data_subfolders[length(data_subfolders)]   # pega a mais recente
+run_folder <- data_subfolders[length(data_subfolders)]
 cat(sprintf("Loading data from: %s\n", run_folder))
 
-load(file.path(run_folder, "df_transf.rda"))    # df_transf
-load(file.path(run_folder, "targets_br.rda"))   # targets_br (V1..V5)
-load(file.path(run_folder, "all_options.rda"))  # all_options (grid M x V x H)
+load(file.path(run_folder, "df_model.rda"))
+
+if (file.exists(file.path(run_folder, "df_targets.rda"))) {
+  load(file.path(run_folder, "df_targets.rda"))
+} else {
+  df_targets <- NULL
+}
+
+if (file.exists(file.path(run_folder, "df_panel_pca.rda"))) {
+  load(file.path(run_folder, "df_panel_pca.rda"))
+} else {
+  df_panel_pca <- NULL
+}
+
+if (file.exists(file.path(run_folder, "targets_br.rda"))) {
+  load(file.path(run_folder, "targets_br.rda"))
+} else {
+  targets_br <- list(
+    V1 = "PIB",
+    V2 = "IPCA",
+    V3 = "SELIC",
+    V4 = "CAMBIO",
+    V5 = "DESEMPREGO"
+  )
+}
 
 # ============================================================
-# DEFINE VARIÁVEIS-ALVO E HORIZONTE
-# ------------------------------------------------------------
-# targets_br vem do 00_data_download.R com os nomes limpos
-# (PIB, IPCA, SELIC, CAMBIO, DESEMPREGO). Usa esses nomes
-# para indexar df_transf — sem depender dos códigos IPEA.
+# PARAMETERS
 # ============================================================
 
-variable_list <- unlist(targets_br)   # V1="PIB", V2="IPCA", ...
-horizon_list  <- c(1, 3, 6, 12)
-lag_orders    <- 1:6
-model_name    <- "coulombe_2srr"
-window_type   <- "expanding"          # "expanding" ou "rolling"
+variable_list <- unname(unlist(targets_br))
+variable_list <- variable_list[variable_list %in% names(df_model)]
 
-# Confirma que todas as variáveis-alvo estão no painel
-ausentes <- variable_list[!variable_list %in% colnames(df_transf)]
-if (length(ausentes) > 0)
-  stop(paste("Variaveis ausentes em df_transf:", paste(ausentes, collapse = ", ")))
-
-# Remove coluna de data antes de escalar
-df_num <- df_transf |> select(-date)
-
-# Normaliza o painel inteiro (z-score) — necessário para o TVP-ridge
-df_scaled <- as.data.frame(scale(df_num))
+horizon_list <- c(1, 2, 4)
+lag_orders   <- 1:3
+K_grid       <- 1:3
+model_name   <- "coulombe_2srr_br"
+window_type  <- "expanding"
+reopt_every  <- 12L
 
 # ============================================================
-# JANELA DE PREVISÃO
-# ------------------------------------------------------------
-# Período in-sample encerra em Dez/2008.
-# df_transf começa em Fev/1996 (Jan/1996 perdido na diff).
-# Dez/2008 = 155 meses desde Fev/1996 → start_window = 156
-# (o índice 156 é a primeira previsão OOS, Jan/2009).
-# Ajuste start_window se seu df_transf começar em outra data.
+# PREPARE MODEL BASE
 # ============================================================
 
-n_total      <- nrow(df_scaled)
-start_window <- 156        # primeiro índice OOS = Jan/2009
-end_window   <- n_total
-nwindows     <- end_window - start_window + 1
+if (!"date" %in% names(df_model)) {
+  stop("df_model precisa conter a coluna date.")
+}
+
+model_df <- df_model |>
+  dplyr::select(-date)
+
+# Mantém apenas colunas finitas
+keep_cols <- names(model_df)[sapply(model_df, function(x) all(is.finite(x)))]
+model_df  <- model_df[, keep_cols, drop = FALSE]
+
+# Confirma alvos presentes
+ausentes <- variable_list[!variable_list %in% colnames(model_df)]
+if (length(ausentes) > 0) {
+  stop(paste("Variáveis-alvo ausentes em df_model:", paste(ausentes, collapse = ", ")))
+}
+
+# Padronização do painel
+scaled_mat <- scale(model_df)
+df_scaled  <- as.data.frame(scaled_mat)
+
+n_total <- nrow(df_scaled)
+
+# Janela inicial: 70% da amostra, com mínimo de 60 observações
+start_window <- max(60L, floor(n_total * 0.70))
+if (start_window >= n_total) start_window <- n_total - 1L
+
+end_window <- n_total
+nwindows   <- end_window - start_window + 1L
 
 cat(sprintf("Panel: %d obs x %d vars | OOS windows: %d (index %d to %d)\n",
             n_total, ncol(df_scaled), nwindows, start_window, end_window))
 
-stopifnot("start_window deve ser >= 50" = start_window >= 50)
-stopifnot("start_window deve ser < n_total" = start_window <= n_total)
-
-actual_values <- as.matrix(df_scaled[start_window:end_window, variable_list,
-                                     drop = FALSE])
-
 # ============================================================
-# dataprep_generic
-# ------------------------------------------------------------
-# Prepara Xin, Xout, yin para qualquer janela de df já
-# transformado. Usa os K primeiros fatores principais de X
-# como regressores, concatenados com lags de y — exatamente
-# como dataprep(..., dataset="B0ARDI") da Nathalia, mas sem
-# depender do nome do dataset.
+# HELPER FUNCTIONS
 # ============================================================
 
-dataprep_generic <- function(df, horizon, variable, lag = 12, K = 6) {
+remove_high_corr <- function(x_mat, cutoff = 0.98) {
+  if (ncol(x_mat) <= 1L) return(x_mat)
+  cor_mat <- suppressWarnings(cor(x_mat, use = "pairwise.complete.obs"))
+  keep <- rep(TRUE, ncol(x_mat))
+  for (j in 2:ncol(x_mat)) {
+    if (any(abs(cor_mat[j, 1:(j - 1)]) > cutoff, na.rm = TRUE)) {
+      keep[j] <- FALSE
+    }
+  }
+  x_mat[, keep, drop = FALSE]
+}
 
-  df    <- as.data.frame(df)
-  n     <- nrow(df)
-  y_all <- df[[variable]]
+prep_window <- function(df, variable, horizon, lag_y = 2L, K = 2L) {
+  y <- as.numeric(df[[variable]])
+  x <- as.matrix(df[, setdiff(names(df), variable), drop = FALSE])
 
-  # Regressores: todas as colunas exceto a variável-alvo
-  x_mat <- as.matrix(df[, setdiff(colnames(df), variable), drop = FALSE])
+  if (any(!is.finite(y))) stop(sprintf("y inválido para %s", variable))
 
-  # 1. Remove colunas com NA ou Inf
-  cols_ok <- apply(x_mat, 2, function(col) all(is.finite(col)))
-  x_mat   <- x_mat[, cols_ok, drop = FALSE]
+  # remove colunas ruins
+  if (ncol(x) > 0L) {
+    ok_fin <- apply(x, 2, function(col) all(is.finite(col)))
+    x <- x[, ok_fin, drop = FALSE]
+  }
 
-  # 2. Remove colunas com variância zero (constantes dentro da janela)
-  cols_var <- apply(x_mat, 2, function(col) var(col) > 0)
-  x_mat    <- x_mat[, cols_var, drop = FALSE]
+  if (ncol(x) > 0L) {
+    ok_var <- apply(x, 2, function(col) stats::sd(col) > 1e-8)
+    x <- x[, ok_var, drop = FALSE]
+  }
 
-  # 3. Garante que y também está limpo
-  if (any(!is.finite(y_all)))
-    stop(sprintf("dataprep_generic: y contém NA/Inf (var=%s)", variable))
+  if (ncol(x) > 1L) {
+    x <- remove_high_corr(x, cutoff = 0.98)
+  }
 
-  if (ncol(x_mat) == 0L)
-    stop(sprintf("dataprep_generic: nenhuma coluna válida em x (n=%d, h=%d)",
-                 n, horizon))
+  if (ncol(x) < 1L) stop(sprintf("Sem regressoras válidas para %s", variable))
 
-  K_actual <- min(K, ncol(x_mat), n - 1L)
+  K_actual <- min(K, ncol(x), nrow(x) - 1L)
+  if (K_actual < 1L) stop(sprintf("K inválido para %s", variable))
 
-  # Fatores principais
-  factors  <- prcomp(x_mat, scale. = FALSE)$x[, 1:K_actual, drop = FALSE]
+  pca <- prcomp(x, scale. = FALSE, center = FALSE)
+  factors <- pca$x[, 1:K_actual, drop = FALSE]
 
-  # X = [y_lags | fatores_lags]
-  x_full  <- cbind(y_all, factors)
-  X_embed <- embed(as.matrix(x_full), lag)
+  max_lag <- lag_y
+  n <- nrow(df)
 
-  T_embed <- nrow(X_embed)
-  y_start <- lag + horizon
-  y_end   <- n
-  n_obs   <- y_end - y_start + 1L
+  start_idx <- max_lag + 1L
+  end_idx   <- n - horizon
 
-  if (n_obs <= 0L)
-    stop(sprintf("dataprep_generic: window too small (n=%d, lag=%d, h=%d)",
-                 n, lag, horizon))
+  if (end_idx < start_idx) {
+    stop(sprintf("Janela pequena demais: n=%d, h=%d, lag=%d", n, horizon, lag_y))
+  }
 
-  Xin  <- X_embed[1:n_obs,  , drop = FALSE]
-  yin  <- y_all[y_start:y_end]
-  Xout <- X_embed[T_embed,   , drop = FALSE]
+  Xin <- NULL
+  yin <- NULL
 
-  stopifnot(nrow(Xin) == length(yin))
+  for (t in start_idx:end_idx) {
+    y_tgt <- y[t + horizon]
+    y_lags <- y[(t - 1L):(t - lag_y)]
+    f_t <- factors[t, , drop = TRUE]
+    row_x <- c(y_lags, f_t)
+    Xin <- rbind(Xin, row_x)
+    yin <- c(yin, y_tgt)
+  }
 
-  list(Xin = Xin, Xout = as.vector(Xout), yin = yin)
+  t_last <- n
+  y_lags_last <- y[(t_last):(t_last - lag_y + 1L)]
+  f_last <- factors[n, , drop = TRUE]
+  Xout <- c(y_lags_last, f_last)
+
+  Xin <- as.matrix(Xin)
+  yin <- as.numeric(yin)
+  Xout <- as.numeric(Xout)
+
+  good_rows <- apply(Xin, 1, function(z) all(is.finite(z))) & is.finite(yin)
+  Xin <- Xin[good_rows, , drop = FALSE]
+  yin <- yin[good_rows]
+
+  if (nrow(Xin) < 25L) {
+    stop(sprintf("Poucas observações úteis: %d", nrow(Xin)))
+  }
+
+  list(Xin = Xin, yin = yin, Xout = Xout)
+}
+
+run_tvp_2srr <- function(df, variable, horizon, lag_y, K, best = list(), reopt = FALSE) {
+  prep <- prep_window(df = df, variable = variable, horizon = horizon, lag_y = lag_y, K = K)
+
+  lambdavec <- exp(pracma::linspace(-4, 10, n = 12))
+  if (is.null(best$lambda)) reopt <- TRUE
+
+  lambda_use <- if (reopt) lambdavec else best$lambda
+
+  out <- tvp.ridge(
+    X                 = prep$Xin,
+    Y                 = matrix(prep$yin, ncol = 1),
+    lambda.candidates = lambda_use,
+    oosX              = prep$Xout,
+    kfold             = 5L,
+    CV.2SRR           = TRUE,
+    CV.plot           = FALSE,
+    sig.eps.param     = 0.75,
+    sig.u.param       = 0.75
+  )
+
+  if (reopt) {
+    best <- list(lambda = out$lambdas, lag = lag_y, K = K)
+  }
+
+  list(pred = as.numeric(out$forecast), best = best)
 }
 
 # ============================================================
-# func_coulombe_2srr
-# ------------------------------------------------------------
-# Wrapper para tvp.ridge() (MV2SRR_v221103.R).
-# Re-otimiza lambda via CV quando reoptimize_hyperparameters
-# = TRUE; nas demais janelas reutiliza best$lambda.
-# ============================================================
-
-func_coulombe_2srr <- function(df, horizon, variable, lag_orders,
-                               reoptimize_hyperparameters = FALSE,
-                               best = list()) {
-
-  lag  <- if (!is.null(best$lag)) best$lag else max(lag_orders)
-  prep <- dataprep_generic(df, horizon = horizon, variable = variable,
-                           lag = lag, K = 6L)
-
-  # Grid de lambdas do paper (Coulombe 2022)
-  lambdavec <- exp(pracma::linspace(-6, 20, n = 15))
-
-  # Na primeira janela nunca há lambda salvo — força re-otimização
-  if (is.null(best$lambda)) reoptimize_hyperparameters <- TRUE
-
-  result <- tryCatch({
-
-    lambda_use <- if (reoptimize_hyperparameters) lambdavec else best$lambda
-
-    out <- tvp.ridge(
-      X                 = prep$Xin,
-      Y                 = matrix(prep$yin, ncol = 1),
-      lambda.candidates = lambda_use,
-      oosX              = prep$Xout,
-      kfold             = 5L,
-      CV.2SRR           = TRUE,
-      CV.plot           = FALSE,
-      sig.eps.param     = 0.75,
-      sig.u.param       = 0.75
-    )
-
-    # Atualiza best apenas quando re-otimizou
-    if (reoptimize_hyperparameters)
-      best <- list(lag = lag, lambda = out$lambdas)
-
-    list(pred = as.numeric(out$forecast), best = best)
-
-  }, error = function(e) {
-    message(sprintf("  [ERROR tvp.ridge] var=%s h=%d: %s",
-                    variable, horizon, e$message))
-    list(pred = NA_real_, best = best)
-  })
-
-  result
-}
-
-# ============================================================
-# FORECASTING LOOP
-# ------------------------------------------------------------
-# Loop externo: variáveis × horizontes
-# Loop interno: janelas OOS (expanding window)
-# Lambda re-otimizado a cada 12 janelas e sempre na primeira.
+# FORECAST LOOP
 # ============================================================
 
 set.seed(1234)
 forecasts_list <- list()
 
 for (v in variable_list) {
-
   for (h in horizon_list) {
 
-    cat(sprintf("\n[%s] var=%-12s | h=%2d\n", model_name, v, h))
+    cat(sprintf("\n[%s] var=%-12s | h=%d\n", model_name, v, h))
 
-    best       <- list()
+    best <- list()
     model_list <- vector("list", nwindows)
 
     for (i in seq_len(nwindows)) {
-
-      # Índice da última observação de treino nesta janela
       train_end <- start_window - h - 1L + i
 
-      if (train_end < 30L) {
+      if (train_end < 40L) {
         model_list[[i]] <- list(pred = NA_real_)
         next
       }
@@ -287,102 +292,87 @@ for (v in variable_list) {
         df_scaled[max(1L, train_end - 119L):train_end, , drop = FALSE]
       }
 
-      # Re-otimiza lambda na primeira janela e a cada 12
-      reopt <- (i == 1L) || (i %% 12L == 1L)
-      if (reopt) cat(sprintf("  re-optimizing lambda (window %d/%d)\n",
-                             i, nwindows))
+      reopt <- (i == 1L) || (i %% reopt_every == 1L)
+      if (reopt) cat(sprintf("  re-optimizing lambda (window %d/%d)\n", i, nwindows))
 
-      model <- func_coulombe_2srr(
-        df                         = Df,
-        horizon                    = h,
-        variable                   = v,
-        lag_orders                 = lag_orders,
-        reoptimize_hyperparameters = reopt,
-        best                       = best
-      )
+      model <- tryCatch({
+        run_tvp_2srr(
+          df       = Df,
+          variable = v,
+          horizon  = h,
+          lag_y    = 2L,
+          K        = 2L,
+          best     = best,
+          reopt    = reopt
+        )
+      }, error = function(e) {
+        message(sprintf("  [ERROR tvp.ridge] var=%s h=%d win=%d: %s", v, h, i, e$message))
+        list(pred = NA_real_, best = best)
+      })
 
-      # Fallback: replica previsão anterior se der NA
       if (is.na(model$pred)) {
-        model$pred <- if (i > 1L && !is.na(model_list[[i - 1L]]$pred))
+        model$pred <- if (i > 1L && !is.na(model_list[[i - 1L]]$pred)) {
           model_list[[i - 1L]]$pred
-        else 0
+        } else {
+          0
+        }
         cat(sprintf("  [fallback] window %d uses previous pred\n", i))
       }
 
       model_list[[i]] <- list(pred = model$pred)
-      best            <- model$best
+      best <- model$best
     }
 
     preds <- vapply(model_list, function(x) x$pred, numeric(1L))
+
+    actual_idx_end <- min(end_window, start_window + nwindows - 1L)
+    actual_vec <- as.numeric(df_scaled[start_window:actual_idx_end, v])
 
     forecasts_list[[length(forecasts_list) + 1L]] <- list(
       variable = v,
       horizon  = h,
       model    = model_name,
-      pred     = preds
+      pred     = preds,
+      actual   = actual_vec
     )
 
-    cat(sprintf("  -> %d forecasts | NAs: %d\n",
-                length(preds), sum(is.na(preds))))
+    cat(sprintf("  -> %d forecasts | NAs: %d\n", length(preds), sum(is.na(preds))))
   }
 }
 
 # ============================================================
-# SALVA PREVISÕES
+# SAVE FORECASTS
 # ============================================================
 
-saveRDS(forecasts_list,
-        file = file.path(paths$output, paste0(model_name, ".rds")))
-saveRDS(actual_values,
-        file = file.path(paths$output, "actual_values.rds"))
+saveRDS(forecasts_list, file = file.path(output_run, paste0(model_name, ".rds")))
 
-cat(sprintf("\nForecast completo. %d combinacoes (var x horizonte) salvas em %s/\n",
-            length(forecasts_list), paths$output))
+cat(sprintf("\nForecast completo. %d combinações salvas em %s/\n",
+            length(forecasts_list), output_run))
 
 # ============================================================
-# CHECKUPS — MSFE, RMSFE, MAE
-# ------------------------------------------------------------
-# err[i] = pred[i] - actual[i]: alinha diretamente pois
-# pred[i] já é a previsão h passos à frente do passo i.
+# CHECKUPS
 # ============================================================
 
-forecasts <- readRDS(file.path(paths$output, "coulombe_2srr.rds"))
-actual    <- readRDS(file.path(paths$output, "actual_values.rds"))
-
-results <- do.call(rbind, lapply(forecasts, function(f) {
-  act <- actual[, f$variable]
-  n   <- min(length(f$pred), length(act))
-  err <- f$pred[1:n] - act[1:n]
+results <- do.call(rbind, lapply(forecasts_list, function(f) {
+  n <- min(length(f$pred), length(f$actual))
+  err <- f$pred[1:n] - f$actual[1:n]
   data.frame(
     variable = f$variable,
     horizon  = f$horizon,
-    MSFE     = mean(err^2,    na.rm = TRUE),
+    MSFE     = mean(err^2, na.rm = TRUE),
     RMSFE    = sqrt(mean(err^2, na.rm = TRUE)),
     MAE      = mean(abs(err), na.rm = TRUE)
   )
 }))
 
-cat("\n=== In-sample fit stats ===\n")
-print(results, digits = 4)
-
-# ============================================================
-# BENCHMARK — RANDOM WALK
-# ------------------------------------------------------------
-# RW: pred[t+h] = act[t]  (sem deriva)
-# MSFE_rel < 1 = 2SRR bate o RW
-# ============================================================
-
-rw_results <- do.call(rbind, lapply(forecasts, function(f) {
-  act <- actual[, f$variable]
+rw_results <- do.call(rbind, lapply(forecasts_list, function(f) {
+  act <- f$actual
   h   <- f$horizon
   n   <- length(act)
-
   if (n <= h) return(NULL)
-
   rw_pred <- act[1:(n - h)]
   rw_act  <- act[(1 + h):n]
   rw_err  <- rw_pred - rw_act
-
   data.frame(
     variable = f$variable,
     horizon  = h,
@@ -390,37 +380,22 @@ rw_results <- do.call(rbind, lapply(forecasts, function(f) {
   )
 }))
 
-# MSFE relativo ao RW
-results_rel <- merge(results, rw_results, by = c("variable", "horizon"))
+results_rel <- merge(results, rw_results, by = c("variable", "horizon"), all.x = TRUE)
 results_rel$MSFE_rel <- results_rel$MSFE / results_rel$MSFE_RW
 
-cat("\n=== MSFE relativo ao Random Walk (< 1 = 2SRR superior) ===\n")
-print(results_rel[, c("variable", "horizon", "MSFE", "MSFE_RW",
-                      "MSFE_rel", "RMSFE")],
-      digits = 4, row.names = FALSE)
-
-# ============================================================
-# TESTE DIEBOLD-MARIANO — 2SRR vs Random Walk
-# ------------------------------------------------------------
-# H0: MSFE iguais | H1 (less): MSFE do 2SRR < MSFE do RW
-# p < 0.05 → 2SRR significativamente superior ao RW
-# ============================================================
-
-dm_results <- do.call(rbind, lapply(forecasts, function(f) {
-  act <- actual[, f$variable]
+dm_results <- do.call(rbind, lapply(forecasts_list, function(f) {
+  act <- f$actual
   h   <- f$horizon
   n   <- min(length(f$pred), length(act))
 
-  e1 <- f$pred[1:n] - act[1:n]                    # erro 2SRR
-
-  # Erro RW: alinhado com o mesmo índice de e1
-  # e2[i] = act[i] - act[i - h]  (pred RW h passos antes)
+  e1 <- f$pred[1:n] - act[1:n]
   e2 <- rep(NA_real_, n)
-  for (i in (h + 1L):n) e2[i] <- act[i - h] - act[i]
+  if (n > h) {
+    for (i in (h + 1L):n) e2[i] <- act[i - h] - act[i]
+  }
 
-  # Remove NAs para o teste
   keep <- !is.na(e1) & !is.na(e2)
-  if (sum(keep) < 10L){
+  if (sum(keep) < 10L) {
     return(data.frame(variable = f$variable,
                       horizon  = h,
                       DM_stat  = NA_real_,
@@ -429,85 +404,37 @@ dm_results <- do.call(rbind, lapply(forecasts, function(f) {
   }
 
   dm_test <- tryCatch(
-    forecast::dm.test(e1[keep], e2[keep],
-                      alternative = "less",
-                      h           = h,
-                      power       = 2),
+    forecast::dm.test(e1[keep], e2[keep], alternative = "less", h = h, power = 2),
     error = function(e) NULL
   )
-
-  p_val <- if (!is.null(dm_test)) dm_test$p.value else NA_real_
-  stat  <- if (!is.null(dm_test)) dm_test$statistic else NA_real_
 
   data.frame(
     variable = f$variable,
     horizon  = h,
-    DM_stat  = as.numeric(stat),
-    p_value  = p_val,
-    MSFE_rel = mean(e1[keep]^2, na.rm = TRUE) /
-               mean(e2[keep]^2, na.rm = TRUE)
+    DM_stat  = if (!is.null(dm_test)) as.numeric(dm_test$statistic) else NA_real_,
+    p_value  = if (!is.null(dm_test)) dm_test$p.value else NA_real_,
+    MSFE_rel = mean(e1[keep]^2, na.rm = TRUE) / mean(e2[keep]^2, na.rm = TRUE)
   )
 }))
 
-cat("\n=== Teste Diebold-Mariano: 2SRR vs Random Walk ===\n")
-cat("H0: MSFE iguais | H1 (less): MSFE do 2SRR < MSFE do RW\n\n")
-print(dm_results[, c("variable", "horizon", "DM_stat",
-                      "p_value", "MSFE_rel")],
-      digits = 4, row.names = FALSE)
-
-# ============================================================
-# CONSOLIDA E SALVA RESULTADOS FINAIS
-# ============================================================
-
 results_summary <- list(
-  fit_stats  = results,
-  msfe_rel   = results_rel,
-  dm_vs_rw   = dm_results
+  fit_stats = results,
+  msfe_rel  = results_rel,
+  dm_vs_rw  = dm_results
 )
 
-saveRDS(results_summary,
-        file = file.path(paths$results, "results_summary.rds"))
-
-# Exporta também em CSV para leitura rápida
-write.csv(results,
-          file      = file.path(paths$results, "TAB01_fit_stats.csv"),
-          row.names = FALSE)
-
-write.csv(results_rel,
-          file      = file.path(paths$results, "TAB02_msfe_relativo.csv"),
-          row.names = FALSE)
-
-write.csv(dm_results,
-          file      = file.path(paths$results, "TAB03_diebold_mariano.csv"),
-          row.names = FALSE)
-
-cat(sprintf("\n✅ Resultados salvos em %s/\n", paths$results))
-cat("   TAB01_fit_stats.csv\n")
-cat("   TAB02_msfe_relativo.csv\n")
-cat("   TAB03_diebold_mariano.csv\n")
-cat("   results_summary.rds\n")
-
-# ============================================================
-# RESUMO FINAL NO CONSOLE
-# ============================================================
+saveRDS(results_summary, file = file.path(paths$results, "results_summary.rds"))
+write.csv(results,      file = file.path(paths$results, "TAB01_fit_stats.csv"), row.names = FALSE)
+write.csv(results_rel,  file = file.path(paths$results, "TAB02_msfe_relativo.csv"), row.names = FALSE)
+write.csv(dm_results,   file = file.path(paths$results, "TAB03_diebold_mariano.csv"), row.names = FALSE)
 
 cat("\n=== RESUMO GERAL ===\n")
-cat(sprintf("Modelo      : %s\n",   model_name))
-cat(sprintf("Janela      : %s\n",   window_type))
-cat(sprintf("Variáveis   : %s\n",   paste(variable_list, collapse = ", ")))
-cat(sprintf("Horizontes  : %s\n",   paste(horizon_list,  collapse = ", ")))
-cat(sprintf("Combinações : %d\n",   length(forecasts_list)))
-cat(sprintf("OOS windows : %d\n",   nwindows))
+cat(sprintf("Modelo      : %s\n", model_name))
+cat(sprintf("Janela      : %s\n", window_type))
+cat(sprintf("Variáveis   : %s\n", paste(variable_list, collapse = ", ")))
+cat(sprintf("Horizontes  : %s\n", paste(horizon_list, collapse = ", ")))
+cat(sprintf("Combinações : %d\n", length(forecasts_list)))
+cat(sprintf("OOS windows : %d\n", nwindows))
 cat(sprintf("Período OOS : índices %d a %d\n", start_window, end_window))
+cat("\n02_FORECAST.R finalizado.\n")
 
-cat("\n--- MSFE relativo ao RW (< 1 = 2SRR superior) ---\n")
-tab_print <- results_rel[, c("variable", "horizon", "MSFE_rel", "RMSFE")]
-tab_print  <- tab_print[order(tab_print$variable, tab_print$horizon), ]
-print(tab_print, digits = 3, row.names = FALSE)
-
-cat("\n--- DM p-valores (< 0.05 = 2SRR sign. superior ao RW) ---\n")
-dm_print <- dm_results[, c("variable", "horizon", "p_value", "DM_stat")]
-dm_print  <- dm_print[order(dm_print$variable, dm_print$horizon), ]
-print(dm_print, digits = 3, row.names = FALSE)
-
-cat("\n 02_FORECAST.R finalizado.\n")

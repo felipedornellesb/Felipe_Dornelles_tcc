@@ -1,0 +1,363 @@
+Output folder: 30_output/outputs_04_12_2026 
+MV2SRR_v221103.R carregado com sucesso. 
+Loading data from: 10_data/data_04_12_2026 
+Panel: 359 obs x 8 vars | OOS windows: 109 (index 251 to 359) 
+Targets: PIB, IPCA, SELIC, CAMBIO, DESEMPREGO 
+Panel vars for PCA: 3 
+
+[coulombe_2srr_br] var=PIB          | h=1 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.670139 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.934465 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.946245 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.408380 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.409181 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=2 | tuning MSFE=0.594116 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=3 | K=3 | tuning MSFE=1.117919 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=3 | K=2 | tuning MSFE=1.235753 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.864435 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.689889 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=PIB          | h=2 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.804815 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=2 | K=2 | tuning MSFE=1.072448 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.982383 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.383875 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.458126 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.755111 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=3 | K=3 | tuning MSFE=1.342195 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=1 | K=3 | tuning MSFE=1.493171 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.825750 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.713710 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=PIB          | h=4 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.801445 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.997263 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=2 | tuning MSFE=1.178027 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.484252 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=2 | K=3 | tuning MSFE=1.609557 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.911515 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=2 | tuning MSFE=1.513328 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=1 | K=2 | tuning MSFE=1.828191 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.865769 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.887615 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=IPCA         | h=1 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.408750 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.299842 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.880143 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.372847 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.270437 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=1 | tuning MSFE=1.235478 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.799199 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.316551 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.358983 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.794222 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=IPCA         | h=2 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.594554 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.414179 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.934631 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.504113 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=3 | K=3 | tuning MSFE=1.298541 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=3 | tuning MSFE=1.414008 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=2 | K=3 | tuning MSFE=2.464337 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.424531 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.248559 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.753445 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=IPCA         | h=4 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.476561 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.811254 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.857434 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.407866 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=2 | K=1 | tuning MSFE=1.281201 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.561382 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=1 | tuning MSFE=2.945343 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.591215 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.370800 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.835979 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=SELIC        | h=1 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.284177 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.579538 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.095548 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.108372 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=2 | K=2 | tuning MSFE=0.051662 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.055637 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.427234 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.808669 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.266531 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.464495 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=SELIC        | h=2 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.251162 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.492070 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.045375 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.088395 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.067502 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.053145 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.406110 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.540870 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.205069 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.309448 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=SELIC        | h=4 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.285397 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.554303 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.097229 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.132768 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.071789 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.059459 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.485528 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.788328 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.295708 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.357392 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=CAMBIO       | h=1 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=2 | K=2 | tuning MSFE=0.883829 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.400645 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=3 | tuning MSFE=1.009867 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.536954 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.560874 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.727228 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.930955 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.351233 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.184852 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.382841 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=CAMBIO       | h=2 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.861813 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.417144 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.087955 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.561994 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.985554 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.874253 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=1 | tuning MSFE=1.024099 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.257282 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.196599 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.379058 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=CAMBIO       | h=4 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.860866 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.419850 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.512092 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.662479 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=2 | K=1 | tuning MSFE=2.354538 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.927784 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=3 | tuning MSFE=1.195459 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.223870 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.232178 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.442349 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=DESEMPREGO   | h=1 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=1 | K=2 | tuning MSFE=1.483409 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.306640 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.303735 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=2 | K=2 | tuning MSFE=0.339498 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=2.405261 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=3 | K=1 | tuning MSFE=0.681247 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.524577 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.288299 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.683810 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.094769 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=DESEMPREGO   | h=2 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=2 | K=2 | tuning MSFE=2.687559 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.300388 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.289717 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.238742 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=2 | K=3 | tuning MSFE=3.121480 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=3 | K=3 | tuning MSFE=0.746817 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.614025 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.321200 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=2 | K=1 | tuning MSFE=0.765524 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.126044 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+[coulombe_2srr_br] var=DESEMPREGO   | h=4 
+  selecting hyperparameters (window 1/109) 
+    chosen lag=3 | K=2 | tuning MSFE=0.751595 
+  selecting hyperparameters (window 13/109) 
+    chosen lag=1 | K=1 | tuning MSFE=0.476257 
+  selecting hyperparameters (window 25/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.171239 
+  selecting hyperparameters (window 37/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.226104 
+  selecting hyperparameters (window 49/109) 
+    chosen lag=1 | K=1 | tuning MSFE=3.210540 
+  selecting hyperparameters (window 61/109) 
+    chosen lag=2 | K=2 | tuning MSFE=1.066685 
+  selecting hyperparameters (window 73/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.491358 
+  selecting hyperparameters (window 85/109) 
+    chosen lag=2 | K=3 | tuning MSFE=0.349012 
+  selecting hyperparameters (window 97/109) 
+    chosen lag=1 | K=2 | tuning MSFE=0.662159 
+  selecting hyperparameters (window 109/109) 
+    chosen lag=1 | K=3 | tuning MSFE=0.158020 
+  -> 109 forecasts | NAs: 0 | failures: 0 
+
+=== RESUMO GERAL === 
+Modelo      : coulombe_2srr_br 
+Janela      : expanding 
+Variáveis   : PIB, IPCA, SELIC, CAMBIO, DESEMPREGO 
+Horizontes  : 1, 2, 4 
+Combinações : 15 
+OOS windows : 109 
+Período OOS : índices 251 a 359 
+Arquivo de log: 30_output/outputs_04_12_2026/02_03_forecast_log.txt 
+
+02_03_forecast.R finalizado. 

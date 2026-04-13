@@ -1,0 +1,9 @@
+"variable","in_model","coverage_raw","coverage_transformed","remaining_na"
+"PIB",TRUE,1,1,0
+"IPCA",TRUE,1,1,0
+"SELIC",TRUE,1,1,0
+"CAMBIO",TRUE,1,1,0
+"DESEMPREGO",TRUE,0.466666666666667,0.465181058495822,0
+"M1",TRUE,1,1,0
+"EMBI",TRUE,0.952777777777778,0.952646239554318,0
+"Ibovespa",TRUE,1,1,0
