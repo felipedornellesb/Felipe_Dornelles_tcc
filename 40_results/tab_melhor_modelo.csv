@@ -1,0 +1,5 @@
+"var_name","H","spec_label","est_label","RMSFE_rel","n_obs"
+"CAMBIO",1,"AR+F","Ridge",0.993684551921819,204
+"IPCA",1,"AR+Tgt","Ridge",0.991597808381559,204
+"PIB",1,"AR+F","Ridge",NA,204
+"SELIC",1,"AR","MSRRd",0.823304345981309,204

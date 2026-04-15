@@ -21,9 +21,7 @@ rm(list = ls())
 # 0. PATHS
 # ============================================================
 
-wd <- normalizePath(file.path(dirname(sys.frame(1)$ofile), ".."),
-                    mustWork = FALSE)
-if (!dir.exists(wd)) wd <- getwd()
+wd <- "C:/Users/felip/OneDrive/Documentos/tcc/Felipe_Dornelles_tcc/"
 setwd(wd)
 
 paths <- list(
