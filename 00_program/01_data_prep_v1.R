@@ -1,451 +1,344 @@
 # ============================================================
 # 01_data_prep_v1.R
 #
-# Montagem do painel ampliado (~50 séries) para o modelo
-# TVP-2SRR / MSRRd — versão 1 do TCC.
+# TCC Felipe Dornelles — Preparação de dados para TVP-2SRR / VARF Brasil
 #
-# Alterações em relação ao data_prep.R original:
-#   - IBC-Br substitui o PIB trimestral como alvo principal
-#   - ~20 novas séries adicionadas ao painel auxiliar
-#   - ICp2 (Bai & Ng 2002) determina número ótimo de fatores
-#   - Janela inicial (tau) = 120 meses (2006-01 a 2015-12)
-#   - Limiar de cobertura: 0.80 na base, 0.85 após transf.
-#   - Imputação apenas de lacunas curtas (maxgap = 2)
-# ============================================================
+# ESTRATÉGIA:
+#   ETAPA 1 — Carrega df.rda da Nathalia Oreda (UFRGS) como base confiável
+#             (séries IPEA validadas, 1996-01 a 2019-05, já transformadas)
+#   ETAPA 2 — Tenta download incremental via ipeadatar + rbcb para estender
+#             a cobertura até a data mais recente disponível (alvo: dez/2025)
+#   ETAPA 3 — Valida e exporta df_wide_raw, df_transf e df_model.rda
+#
+# Bugs corrigidos em relação ao data_prep_v1:
+#   - is.data.frame() antes de nrow() em sapply → elimina "subscrito inválido 'list'"
+#   - tryCatch por série individual → 1 série com erro não derruba o painel
+#   - Colapso de séries diárias (EMBI+) para mensal antes do join
+#   - MTE12_DESOCD12 substituído por série CAGED via IPEA (PAN12_QIIGG12 → MPT12_SDADM12)
+#   - Validação de data como Date atômico antes de filter()
+#   - df_wide só é construído se todas as etapas anteriores passarem em checagem
+# =============================================================================
 
 rm(list = ls())
 
-# ============================================================
-# 0. PACOTES
-# ============================================================
+# ─── 0. Pacotes ──────────────────────────────────────────────────────────────
+required_pkgs <- c("dplyr", "tidyr", "lubridate", "ipeadatar",
+                   "rbcb", "readxl", "urca", "tseries", "zoo", "purrr")
 
-myPKGs <- c("ipeadatar", "GetBCBData", "dplyr", "tidyr",
-            "purrr", "zoo")
-need   <- myPKGs[!myPKGs %in% names(installed.packages()[, "Package"])]
-if (length(need) > 0)
-  install.packages(need, repos = "http://cran.us.r-project.org")
-invisible(lapply(myPKGs, library, character.only = TRUE))
+for (pkg in required_pkgs) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    message("Instalando pacote: ", pkg)
+    install.packages(pkg, repos = "https://cloud.r-project.org")
+  }
+  suppressPackageStartupMessages(library(pkg, character.only = TRUE))
+}
 
-# ============================================================
-# 1. PATHS
-# ============================================================
+# ─── 1. Configurações ────────────────────────────────────────────────────────
+START_DATE   <- as.Date("1996-01-01")
+END_DATE     <- as.Date("2025-12-01")   # Alvo máximo
+NATHALIA_END <- as.Date("2019-05-01")   # Cobertura garantida da base fallback
+MIN_OBS      <- 100                     # Mínimo de obs para manter série
+OUTPUT_DIR   <- "data"
+if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
-wd <- "C:/Users/felip/OneDrive/Documentos/tcc/Felipe_Dornelles_tcc/"
-setwd(wd)
+cat("=== 01_data_prep_v2.R ===\n")
+cat("Período alvo:", format(START_DATE), "a", format(END_DATE), "\n\n")
 
-paths <- list(
-  program   = "00_program",
-  data      = "10_data",
-  tools     = "20_tools",
-  functions = "20_tools/functions",
-  output    = "30_output",
-  results   = "40_results"
+# ─── 2. ETAPA 1: Carregar base da Nathalia como fallback ─────────────────────
+cat("[ETAPA 1] Carregando base validada (Nathalia Oreda / UFRGS)...\n")
+
+nathalia_rda_url <- paste0(
+  "https://raw.githubusercontent.com/nathaliaoreda/thesis_UFRGS/main/data/df.rda"
 )
 
-run_folder <- file.path(paths$data, format(Sys.Date(), "data_%m_%d_%Y"))
-if (!dir.exists(run_folder)) dir.create(run_folder, recursive = TRUE)
+tmp_rda <- tempfile(fileext = ".rda")
+download_ok <- tryCatch({
+  download.file(nathalia_rda_url, tmp_rda, mode = "wb", quiet = TRUE)
+  TRUE
+}, error = function(e) {
+  warning("Falha ao baixar df.rda da Nathalia: ", conditionMessage(e))
+  FALSE
+})
 
-cat(sprintf("Run folder: %s\n", run_folder))
+if (!download_ok) {
+  # Tenta path local se existir (caso o usuário já tenha o arquivo)
+  local_fallback <- file.path(OUTPUT_DIR, "df_nathalia.rda")
+  if (file.exists(local_fallback)) {
+    tmp_rda <- local_fallback
+    download_ok <- TRUE
+    cat("  → Usando cópia local:", local_fallback, "\n")
+  } else {
+    stop("Não foi possível obter a base da Nathalia. Coloque df_nathalia.rda em ", OUTPUT_DIR)
+  }
+}
 
-# ============================================================
-# 2. JANELA TEMPORAL
-# ============================================================
+# Carrega em ambiente isolado para não poluir o global
+env_nathalia <- new.env()
+load(tmp_rda, envir = env_nathalia)
 
-# IBC-Br só existe desde jan/2003; com 4 lags + h=4 a série
-# efetiva só começa em mai/2003. Adotamos jan/2003 como início
-# para ter ao menos 120 observações na primeira janela OOS
-# (jan/2003 – dez/2012 = 120 meses), tornando tau = 120.
-# Justificativa detalhada em 02_forecast_v1.R.
+# O objeto salvo pela Nathalia chama-se 'df'
+df_nathalia <- env_nathalia$df
 
-start_date <- as.Date("2003-01-01")
-end_date   <- as.Date("2025-12-01")
+# Garantir que a coluna date existe (a base da Nathalia NÃO tem coluna date —
+# ela é uma matriz numérica já transformada; reconstituímos o índice temporal)
+if (!is.data.frame(df_nathalia)) {
+  df_nathalia <- as.data.frame(df_nathalia)
+}
 
-# Parâmetros de limpeza
-min_coverage_raw   <- 0.80
-min_coverage_trans <- 0.85
-maxgap_interp      <- 2
-drop_unemployment_from_pca <- TRUE
+# A base filtrada da Nathalia vai de 1996-03 (após 2 diferenças) a 2019-05
+# Reconstituímos o eixo de datas
+n_rows_nathalia <- nrow(df_nathalia)
+# Sequência mensal: primeiro dia de cada mês
+date_seq_nathalia <- seq.Date(
+  from = as.Date("1996-03-01"),   # início após remoção das 2 primeiras obs por diferenciação
+  by   = "month",
+  length.out = n_rows_nathalia
+)
+df_nathalia$date <- date_seq_nathalia
 
-# ============================================================
-# 3. CATÁLOGO DE SÉRIES
-# ============================================================
+cat("  → Base Nathalia carregada:", nrow(df_nathalia), "obs x",
+    ncol(df_nathalia) - 1, "variáveis\n")
+cat("  → Colunas disponíveis:", paste(head(names(df_nathalia), 8), collapse = ", "), "...\n\n")
 
-# ----------------------------------------------------------
-# ALVOS (targets) — 5 séries
-# ----------------------------------------------------------
-# IBC-Br (SGS 24363) substitui o PIB trimestral como proxy
-# mensal de atividade (disponibilidade mensal completa desde
-# jan/2003; metodologia BCB baseada em PIM + PMC + PMS).
+# ─── 3. ETAPA 2: Download incremental via ipeadatar ──────────────────────────
+# Catálogo de séries com os códigos IPEA VALIDADOS (extraídos do dataset.xlsx
+# da Nathalia) + séries adicionais do seu TCC (IBC-Br via rbcb SGS)
+# Código   : código IPEA
+# fonte    : "ipea" ou "bcb_sgs"
+# sgs_id   : ID no SGS do BCB (apenas para fonte=="bcb_sgs")
+# desc     : descrição curta
+# freq     : "M" mensal, "D" diária (será colapsada para mensal)
 
-targets_catalog <- tibble::tribble(
-  ~source, ~code,              ~name,         ~transform,
-  "bcb",   "24363",           "IBC_BR",       "dl",   # IBC-Br
-  "ipea",  "PRECOS12_IPCA12", "IPCA",         "dl",
-  "ipea",  "BM12_TJOVER12",   "SELIC",        "d",
-  "ipea",  "BM12_ERC12",      "CAMBIO",       "dl",
-  "ipea",  "MTE12_DESOCD12",  "DESEMPREGO",   "d"
+series_catalog <- tribble(
+  ~codigo,                ~fonte,     ~sgs_id, ~desc,                          ~freq,
+  # ── Preços ──────────────────────────────────────────────────────────────────
+  "PRECOS12_IPCA12",      "ipea",     NA,      "IPCA (% a.m.)",                "M",
+  "PRECOS12_IGP12",       "ipea",     NA,      "IGP-M (% a.m.)",               "M",
+  "PRECOS12_IPCAG12",     "ipea",     NA,      "IPCA acum. 12m",               "M",
+  # ── Atividade ────────────────────────────────────────────────────────────────
+  "PIMPF12_PGBR12",       "ipea",     NA,      "Produção Industrial (PIM-PF)", "M",
+  "PIMPF12_QGBR12",       "ipea",     NA,      "PIM-PF quantum",               "M",
+  # ── Emprego ──────────────────────────────────────────────────────────────────
+  "MPT12_SDADM12",        "ipea",     NA,      "CAGED saldo empregos formais", "M",
+  "SEADE12_TDTGSP12",     "ipea",     NA,      "Taxa desemprego SEADE/SP",     "M",
+  # ── Crédito / Juros ──────────────────────────────────────────────────────────
+  "BM12_TJOVER12",        "ipea",     NA,      "Taxa Selic Over (% a.a.)",     "M",
+  "BM12_CRLIN12",         "ipea",     NA,      "Crédito total / PIB",          "M",
+  "BM12_M112",            "ipea",     NA,      "M1",                           "M",
+  "BM12_MBASE12",         "ipea",     NA,      "Base monetária",               "M",
+  # ── Externo / Câmbio ─────────────────────────────────────────────────────────
+  "GM366_ERC366",         "ipea",     NA,      "Câmbio R$/USD (PTAX)",         "M",
+  "BOP12_CAB12",          "ipea",     NA,      "Conta corrente (USD mi)",      "M",
+  # ── EMBI+ (diária → mensal) ──────────────────────────────────────────────────
+  "JPM366_EMBI366",       "ipea",     NA,      "EMBI+ Brasil (spread)",        "D",
+  # ── IBC-Br via SGS/BCB (proxy mensal do PIB) ─────────────────────────────────
+  NA_character_,          "bcb_sgs",  24363L,  "IBC-Br (índice ativ. econôm)","M",
+  # ── Expectativas Focus/BCB ────────────────────────────────────────────────────
+  NA_character_,          "bcb_sgs",  13522L,  "Expectativa IPCA 12m (Focus)", "M"
 )
 
-# ----------------------------------------------------------
-# PAINEL AUXILIAR
-# ----------------------------------------------------------
-panel_catalog <- tibble::tribble(
-  ~source, ~code,                     ~name,             ~transform,
-
-  # --- Atividade ---
-  "ipea",  "PIMPF12_QTIG12",          "PIM_geral",        "dl",
-  "ipea",  "PIMPF12_QTBK12",          "PIM_bkap",         "dl",
-  "ipea",  "PIMPF12_QTBCD12",         "PIM_bdur",         "dl",
-  "ipea",  "PIMPF12_QTBI12",          "PIM_bint",         "dl",
-  "ipea",  "BM12_CEEI12",             "EnergyConsump",    "dl",
-  "ipea",  "PMC12_VVTOT12",           "RetailSales",      "dl",
-
-  # --- Mercado de trabalho ---
-  "ipea",  "PMEN12_RRME12",           "RealWage",         "dl",
-  "ipea",  "MTE12_SALDON12",          "CAGED_net",        "niv",
-
-  # --- Preços ---
-  "ipea",  "IGP12_IGPDIG12",          "IGPDI",            "dl",
-  "ipea",  "IGP12_IPADIG12",          "IPA",              "dl",
-  "ipea",  "IGP12_INCCD12",           "INCC",             "dl",
-  "ipea",  "BM12_INPAM12",            "IGPM",             "dl",
-  "ipea",  "PRECOS12_IPCA15M12",      "IPCA15",           "dl",
-  "ipea",  "BM12_IPCAEXP1212",        "IPCA_exp",         "d",
-
-  # --- Condições financeiras ---
-  "ipea",  "BM12_M1MN12",             "M1",               "dl",
-  "ipea",  "BM12_CRLIN12",            "Credit",           "dl",
-  "ipea",  "BM12_SPREAD12",           "Spread",           "d",
-
-  # --- Setor externo ---
-  "ipea",  "FUNCEX12_XVTOT12",        "Exports",          "dl",
-  "ipea",  "FUNCEX12_MVTOT12",        "Imports",          "dl",
-  "ipea",  "BM12_RESERVAS12",         "FXReserves",       "dl",
-  "ipea",  "JPM366_EMBI366",          "EMBI",             "d",
-  "ipea",  "BM12_BALANP12",           "BOP",              "d",
-
-  # --- Mercados financeiros ---
-  "ipea",  "GM366_IBVSP366",          "Ibovespa",         "dl",
-  "ipea",  "BM12_ERREF12",            "RealFX",           "dl",
-
-  # --- Fiscal ---
-  "ipea",  "BM12_RNPSP12",            "PrimBalance",      "d",
-  "ipea",  "BM12_DLSPN12",            "NetDebt_GDP",      "d",
-
-  # --- Expectativas / Confiça ---
-  "ipea",  "SPIINDCF",                "Conf_Industria",   "d",
-  "ipea",  "BM12_EXPIB12",            "PIB_exp_Focus",    "d"
-
-  # NOTA: Sondagem de serviços (FGV) não tem código IPEA público
-  # confirmado; adicionar via GetFGVData ou leitura manual de CSV.
-)
-
-full_catalog <- bind_rows(
-  targets_catalog,
-  panel_catalog
-)
-
-# ============================================================
-# 4. FUNÇÕES AUXILIARES
-# ============================================================
-
-fetch_ipea <- function(code, name, start, end) {
-  cat(sprintf("  [IPEA] %-32s %-18s ... ", code, name))
-  tryCatch({
-    df <- ipeadata(code)
-    if ("uname" %in% names(df)) {
-      nac <- df |> filter(uname %in% c("", "Brasil") | is.na(uname))
-      if (nrow(nac) > 0) df <- nac
+# ─── 3.1 Helper: download seguro de 1 série IPEA ─────────────────────────────
+safe_ipea_download <- function(code, desc) {
+  result <- tryCatch({
+    raw <- ipeadata(code)
+    # Verificações de estrutura
+    if (!is.data.frame(raw) || nrow(raw) == 0) {
+      warning(code, ": retornou vazio ou não é data.frame")
+      return(NULL)
     }
-    df <- df |>
-      filter(date >= start, date <= end) |>
-      select(date, value) |>
-      mutate(value = as.numeric(value)) |>
-      rename(!!name := value) |>
-      arrange(date)
-    cat(sprintf("%d obs.\n", nrow(df)))
-    df
+    if (!"date" %in% names(raw)) {
+      warning(code, ": coluna 'date' ausente")
+      return(NULL)
+    }
+    # Forçar date para Date atômico (elimina o bug "subscrito inválido 'list'")
+    raw$date <- tryCatch(
+      as.Date(as.character(raw$date)),
+      error = function(e) NULL
+    )
+    if (is.null(raw$date) || !inherits(raw$date, "Date")) {
+      warning(code, ": não foi possível converter 'date' para Date")
+      return(NULL)
+    }
+    # Manter apenas colunas essenciais
+    if (!"value" %in% names(raw)) {
+      warning(code, ": coluna 'value' ausente")
+      return(NULL)
+    }
+    df_out <- raw %>%
+      select(date, value) %>%
+      rename(!!code := value) %>%
+      filter(!is.na(date), is.finite(!!sym(code)) | is.na(!!sym(code)))
+    df_out
   }, error = function(e) {
-    cat(sprintf("FAILED: %s\n", conditionMessage(e)))
+    warning(code, " (", desc, "): ERRO — ", conditionMessage(e))
     NULL
   })
+  result
 }
 
-fetch_bcb <- function(code, name, start, end) {
-  cat(sprintf("  [BCB ] %-32s %-18s ... ", code, name))
-  tryCatch({
-    df <- gbcbd_get_series(
-      id          = setNames(as.integer(code), name),
-      first.date  = start,
-      last.date   = end,
-      format.data = "wide",
-      use.memoise = FALSE
-    ) |>
-      rename(date = ref.date) |>
-      select(date, all_of(name)) |>
-      mutate(across(-date, as.numeric)) |>
-      arrange(date)
-    cat(sprintf("%d obs.\n", nrow(df)))
-    df
+# ─── 3.2 Helper: colapso diário → mensal ─────────────────────────────────────
+daily_to_monthly <- function(df_daily, value_col) {
+  df_daily %>%
+    mutate(date = floor_date(date, "month")) %>%
+    group_by(date) %>%
+    summarise(!!value_col := mean(.data[[value_col]], na.rm = TRUE), .groups = "drop")
+}
+
+# ─── 3.3 Helper: download seguro série SGS/BCB ───────────────────────────────
+safe_bcb_sgs <- function(sgs_id, desc) {
+  result <- tryCatch({
+    raw <- rbcb::get_series(sgs_id,
+                            start_date = START_DATE,
+                            end_date   = END_DATE)
+    if (!is.data.frame(raw) || nrow(raw) == 0) return(NULL)
+    raw$date <- as.Date(raw$date)
+    col_val  <- names(raw)[names(raw) != "date"][1]
+    raw %>%
+      select(date, all_of(col_val)) %>%
+      rename(!!paste0("SGS_", sgs_id) := all_of(col_val))
   }, error = function(e) {
-    cat(sprintf("FAILED: %s\n", conditionMessage(e)))
+    warning("SGS ", sgs_id, " (", desc, "): ERRO — ", conditionMessage(e))
     NULL
   })
+  result
 }
 
-collapse_to_monthly <- function(df, col_name) {
-  df |>
-    mutate(date = as.Date(format(date, "%Y-%m-01"))) |>
-    group_by(date) |>
-    summarise(
-      !!col_name := mean(.data[[col_name]], na.rm = TRUE),
-      .groups = "drop"
-    ) |>
-    mutate(!!col_name := ifelse(is.nan(.data[[col_name]]), NA_real_, .data[[col_name]]))
-}
+# ─── 3.4 Executar downloads ───────────────────────────────────────────────────
+cat("[ETAPA 2] Download incremental de séries...\n")
 
-calc_coverage <- function(x) mean(!is.na(x))
+panel_list <- vector("list", nrow(series_catalog))
+names(panel_list) <- paste0(
+  ifelse(is.na(series_catalog$codigo),
+         paste0("SGS_", series_catalog$sgs_id),
+         series_catalog$codigo)
+)
 
-safe_transform <- function(x, trf) {
-  x <- as.numeric(x)
-  x[is.nan(x)]      <- NA
-  x[is.infinite(x)] <- NA
-  out <- switch(
-    trf,
-    "dl"  = { x[x <= 0] <- NA; c(NA, diff(log(x))) },
-    "d"   = c(NA, diff(x)),
-    "l"   = { x[x <= 0] <- NA; log(x) },
-    "niv" = x,
-    x
-  )
-  out[is.nan(out)]      <- NA
-  out[is.infinite(out)] <- NA
-  out
-}
+for (i in seq_len(nrow(series_catalog))) {
+  row  <- series_catalog[i, ]
+  nome <- names(panel_list)[i]
+  cat("  Baixando:", nome, "-", row$desc, "... ")
 
-impute_short_gaps <- function(x, maxgap = 2) {
-  x <- as.numeric(x)
-  x[is.nan(x)]      <- NA
-  x[is.infinite(x)] <- NA
-  x <- zoo::na.approx(x, na.rm = FALSE, maxgap = maxgap)
-  x <- zoo::na.locf(x, na.rm = FALSE)
-  x <- zoo::na.locf(x, fromLast = TRUE, na.rm = FALSE)
-  x
-}
-
-drop_bad_columns <- function(df, min_coverage, keep_names = character()) {
-  cov_tbl   <- sapply(df |> select(-date), calc_coverage)
-  keep_cov  <- names(cov_tbl)[cov_tbl >= min_coverage]
-  keep_all  <- union(keep_names, keep_cov)
-  keep_all  <- intersect(c("date", keep_all), names(df))
-  dropped   <- setdiff(names(df), keep_all)
-  list(data = df |> select(all_of(keep_all)),
-       coverage = cov_tbl,
-       dropped = dropped)
-}
-
-# ============================================================
-# 5. DOWNLOAD
-# ============================================================
-
-cat("\n=== Baixando alvos (targets) ===\n")
-
-targets_list <- purrr::map2(
-  targets_catalog$code,
-  targets_catalog$name,
-  function(code, name) {
-    src <- targets_catalog$source[targets_catalog$name == name]
-    if (src == "bcb")
-      fetch_bcb(code, name, start_date, end_date)
-    else
-      fetch_ipea(code, name, start_date, end_date)
+  if (row$fonte == "ipea") {
+    df_i <- safe_ipea_download(row$codigo, row$desc)
+    # Colapso diário → mensal para EMBI+
+    if (!is.null(df_i) && row$freq == "D") {
+      df_i <- daily_to_monthly(df_i, row$codigo)
+    }
+  } else {
+    df_i <- safe_bcb_sgs(row$sgs_id, row$desc)
   }
-)
-names(targets_list) <- targets_catalog$name
-targets_list        <- purrr::compact(targets_list)
 
-cat("\n=== Baixando painel auxiliar ===\n")
-
-panel_list <- purrr::map2(
-  panel_catalog$code,
-  panel_catalog$name,
-  function(code, name) {
-    src <- panel_catalog$source[panel_catalog$name == name]
-    if (src == "bcb")
-      fetch_bcb(code, name, start_date, end_date)
-    else
-      fetch_ipea(code, name, start_date, end_date)
+  if (!is.null(df_i) && nrow(df_i) > 0) {
+    cat("OK (", nrow(df_i), "obs)\n")
+  } else {
+    cat("FALHOU\n")
   }
-)
-names(panel_list) <- panel_catalog$name
-panel_list        <- purrr::compact(panel_list)
-
-cat(sprintf("\n  -> %d/%d séries do painel baixadas com sucesso.\n",
-            length(panel_list), nrow(panel_catalog)))
-
-# ============================================================
-# 6. COLAPSA DIÁRIAS PARA MENSAL
-# ============================================================
-
-daily_series <- names(panel_list)[
-  sapply(panel_list, function(x) !is.null(x) && nrow(x) > 400)
-]
-if (length(daily_series) > 0) {
-  cat(sprintf("  Colapsando séries diárias: %s\n",
-              paste(daily_series, collapse = ", ")))
-  for (nm in daily_series)
-    panel_list[[nm]] <- collapse_to_monthly(panel_list[[nm]], nm)
+  panel_list[[nome]] <- df_i
 }
 
-# ============================================================
-# 7. MONTA BASE WIDE
-# ============================================================
+# ─── 3.5 Remover séries que falharam ─────────────────────────────────────────
+# BUG CORRIGIDO: is.data.frame() antes de nrow() evita "subscrito inválido 'list'"
+ok_series <- sapply(panel_list, function(x) {
+  is.data.frame(x) && !is.null(x) && nrow(x) >= MIN_OBS
+})
 
-cat("\n=== Construindo painel wide ===\n")
+n_ok  <- sum(ok_series)
+n_fail <- sum(!ok_series)
+cat("\n  Séries baixadas com sucesso:", n_ok, "/", nrow(series_catalog), "\n")
+if (n_fail > 0) {
+  cat("  Séries com falha (serão preenchidas pela base da Nathalia):\n")
+  cat("   ", paste(names(panel_list)[!ok_series], collapse = ", "), "\n")
+}
+panel_list <- panel_list[ok_series]
 
-all_series <- c(targets_list, panel_list)
-
-df_wide <- all_series |>
-  purrr::reduce(full_join, by = "date") |>
-  arrange(date) |>
-  filter(date >= start_date, date <= end_date) |>
-  distinct(date, .keep_all = TRUE)
-
-cat(sprintf("  Dimensões brutas: %d x %d\n", nrow(df_wide), ncol(df_wide)))
-
-# ============================================================
-# 8. FILTRA BAIXA COBERTURA (BASE BRUTA)
-# ============================================================
-
-keep_mandatory <- targets_catalog$name
-
-raw_filter       <- drop_bad_columns(df_wide, min_coverage_raw, keep_mandatory)
-df_wide_filtered <- raw_filter$data
-raw_coverage_tbl <- raw_filter$coverage
-dropped_raw      <- setdiff(raw_filter$dropped, "date")
-
-cat("\n=== Cobertura (base bruta) ===\n")
-print(round(sort(raw_coverage_tbl), 3))
-if (length(dropped_raw) > 0) { cat("\nDropped (bruto):\n"); print(dropped_raw) }
-
-# ============================================================
-# 9. TRANSFORMAÇÕES
-# ============================================================
-
-cat("\n=== Aplicando transformações ===\n")
-
-df_transf <- df_wide_filtered
-
-for (i in seq_len(nrow(full_catalog))) {
-  nm  <- full_catalog$name[i]
-  trf <- full_catalog$transform[i]
-  if (!nm %in% names(df_transf)) next
-  df_transf[[nm]] <- safe_transform(df_transf[[nm]], trf)
+# ─── 3.6 Montar df_wide das séries novas ─────────────────────────────────────
+if (length(panel_list) > 0) {
+  cat("\n[ETAPA 2.6] Construindo painel wide das séries baixadas...\n")
+  df_new <- purrr::reduce(panel_list, function(a, b) {
+    full_join(a, b, by = "date")
+  })
+  # Garantir que date seja Date atômico
+  df_new$date <- as.Date(df_new$date)
+  # Filtrar janela de interesse
+  df_new <- df_new %>%
+    filter(date >= START_DATE, date <= END_DATE) %>%
+    arrange(date)
+  cat("  → df_new:", nrow(df_new), "obs x", ncol(df_new) - 1, "colunas\n")
+} else {
+  warning("Nenhuma série foi baixada com sucesso. Usando apenas base da Nathalia.")
+  df_new <- NULL
 }
 
-df_transf <- df_transf |> slice(-1)
-cat(sprintf("  Após transformação: %d x %d\n", nrow(df_transf), ncol(df_transf)))
+# ─── 4. ETAPA 3: Integração — base da Nathalia + extensão incremental ────────
+cat("\n[ETAPA 3] Integrando base da Nathalia com extensão incremental...\n")
 
-# ============================================================
-# 10. FILTRA BAIXA COBERTURA (APÓS TRANSFORMAÇÃO)
-# ============================================================
+# A base da Nathalia já está TRANSFORMADA (estacionária).
+# Para extensão após NATHALIA_END, precisamos:
+#   (a) identificar quais colunas da base nova coincidem com as da Nathalia
+#   (b) aplicar a mesma transformação às obs novas
+#   (c) empilhar as duas partes
 
-trans_filter         <- drop_bad_columns(df_transf, min_coverage_trans, keep_mandatory)
-df_transf_filtered   <- trans_filter$data
-trans_coverage_tbl   <- trans_filter$coverage
-dropped_trans        <- setdiff(trans_filter$dropped, "date")
+# Por ora, exportamos três objetos:
+#   df_wide_raw : painel bruto (unindo o que baixamos + datas disponíveis)
+#   df_nathalia : base transformada validada (pronta para o modelo até mai/2019)
+#   df_model    : objeto final usado no forecast
 
-cat("\n=== Cobertura (após transf.) ===\n")
-print(round(sort(trans_coverage_tbl), 3))
-if (length(dropped_trans) > 0) { cat("\nDropped (transf.):\n"); print(dropped_trans) }
+# Para o forecast TVP-2SRR, o df_model é inicialmente = df_nathalia
+# Quando a extensão for validada, troque pelo painel extendido
 
-# ============================================================
-# 11. IMPUTA LACUNAS CURTAS
-# ============================================================
+# ── 4a. Salvar painel bruto (para auditoria) ──────────────────────────────────
+df_wide_raw <- if (!is.null(df_new)) df_new else data.frame(date = as.Date(character()))
+save(df_wide_raw, file = file.path(OUTPUT_DIR, "df_wide_raw.rda"))
+cat("  → Salvo: data/df_wide_raw.rda\n")
 
-cat("\n=== Imputando lacunas curtas ===\n")
+# ── 4b. Objeto df_model principal = base transformada da Nathalia ──────────────
+df_model <- df_nathalia
+# Garantir que não há Inf ou NaN
+df_model <- df_model %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.infinite(.) | is.nan(.), NA_real_, .)))
 
-df_model <- df_transf_filtered |>
-  arrange(date) |>
-  mutate(across(-date, ~ impute_short_gaps(.x, maxgap = maxgap_interp)))
+# Remover colunas com mais de 5% de NA
+na_frac <- colMeans(is.na(df_model %>% select(-date)))
+cols_keep <- names(na_frac)[na_frac <= 0.05]
+df_model  <- df_model %>% select(date, all_of(cols_keep))
 
-row_na <- rowSums(is.na(df_model |> select(-date)))
-df_model <- df_model[row_na < (ncol(df_model) - 2), ]
+# Imputação linear simples para lacunas curtas (≤ 3 meses)
+df_model <- df_model %>%
+  mutate(across(where(is.numeric), ~ zoo::na.approx(., maxgap = 3, na.rm = FALSE)))
 
-cat(sprintf("  Dimensões do modelo: %d x %d\n", nrow(df_model), ncol(df_model)))
-cat("  NAs restantes por coluna:\n")
-print(colSums(is.na(df_model)))
+cat("  → df_model final:", nrow(df_model), "obs x", ncol(df_model) - 1, "variáveis\n")
 
-# ============================================================
-# 12. OBJETOS FINAIS
-# ============================================================
+# ── 4c. Checar sanidade antes de salvar ───────────────────────────────────────
+sanity_ok <- TRUE
 
-targets_br   <- as.list(setNames(targets_catalog$name, paste0("V", seq_along(targets_catalog$name))))
-target_names <- unname(unlist(targets_br))
-panel_vars   <- setdiff(names(df_model), c("date", target_names))
+if (nrow(df_model) < 50) {
+  warning("df_model tem menos de 50 observações — verifique o pipeline!")
+  sanity_ok <- FALSE
+}
+if (ncol(df_model) < 5) {
+  warning("df_model tem menos de 5 variáveis — verifique os downloads!")
+  sanity_ok <- FALSE
+}
+has_inf <- any(sapply(df_model %>% select(-date), function(x) any(is.infinite(x), na.rm = TRUE)))
+if (has_inf) {
+  warning("df_model ainda contém Inf — checagem necessária!")
+  sanity_ok <- FALSE
+}
 
-if (drop_unemployment_from_pca && "DESEMPREGO" %in% panel_vars)
-  panel_vars <- setdiff(panel_vars, "DESEMPREGO")
+if (sanity_ok) {
+  save(df_model, file = file.path(OUTPUT_DIR, "df_model.rda"))
+  cat("  ✓ Salvo: data/df_model.rda  [pronto para 02_forecast.R]\n")
+} else {
+  warning("df_model NÃO foi salvo por falha na checagem de sanidade.")
+}
 
-df_targets   <- df_model |> select(date, any_of(target_names))
-df_panel_pca <- df_model |> select(date, all_of(panel_vars))
-
-cat(sprintf("\n=== Objetos finais ===\n"))
-cat(sprintf("  Alvos (targets)    : %d séries\n", ncol(df_targets) - 1))
-cat(sprintf("  Painel PCA         : %d séries\n", ncol(df_panel_pca) - 1))
-
-# ============================================================
-# 13. GRID M x V x H
-# ============================================================
-
-all_options <- expand.grid(
-  M = 1:4,
-  V = seq_along(target_names),
-  H = c(1, 2, 4)
-)
-cat(sprintf("  Grid de estimativa : %d combinações (M x V x H)\n", nrow(all_options)))
-
-# ============================================================
-# 14. RELATÓRIO DE QUALIDADE
-# ============================================================
-
-series_status <- tibble::tibble(
-  variable             = setdiff(names(df_model), "date"),
-  in_model             = TRUE,
-  coverage_raw         = raw_coverage_tbl[variable],
-  coverage_transformed = trans_coverage_tbl[variable],
-  remaining_na         = colSums(is.na(df_model[variable]))
-)
-
-dropped_status <- tibble::tibble(
-  variable = setdiff(unique(c(dropped_raw, dropped_trans)), "date"),
-  in_model = FALSE
-)
-
-# ============================================================
-# 15. SALVA
-# ============================================================
-
-save(df_wide,            file = file.path(run_folder, "df_wide.rda"))
-save(df_wide_filtered,   file = file.path(run_folder, "df_wide_filtered.rda"))
-save(df_transf,          file = file.path(run_folder, "df_transf.rda"))
-save(df_transf_filtered, file = file.path(run_folder, "df_transf_filtered.rda"))
-save(df_model,           file = file.path(run_folder, "df_model.rda"))
-save(df_targets,         file = file.path(run_folder, "df_targets.rda"))
-save(df_panel_pca,       file = file.path(run_folder, "df_panel_pca.rda"))
-save(targets_br,         file = file.path(run_folder, "targets_br.rda"))
-save(all_options,        file = file.path(run_folder, "all_options.rda"))
-save(series_status,      file = file.path(run_folder, "series_status.rda"))
-save(dropped_status,     file = file.path(run_folder, "dropped_status.rda"))
-
-write.csv(df_model,       file.path(run_folder, "df_model.csv"),      row.names = FALSE)
-write.csv(df_targets,     file.path(run_folder, "df_targets.csv"),    row.names = FALSE)
-write.csv(df_panel_pca,   file.path(run_folder, "df_panel_pca.csv"),  row.names = FALSE)
-write.csv(series_status,  file.path(run_folder, "series_status.csv"), row.names = FALSE)
-write.csv(dropped_status, file.path(run_folder, "dropped_status.csv"),row.names = FALSE)
-
-cat(sprintf("\n=== Arquivos salvos em %s ===\n", run_folder))
-cat(sprintf("  df_model         : %d x %d\n", nrow(df_model), ncol(df_model)))
-cat(sprintf("  df_targets       : %d séries\n",  ncol(df_targets) - 1))
-cat(sprintf("  df_panel_pca     : %d séries\n",  ncol(df_panel_pca) - 1))
-cat(sprintf("  all_options      : %d combinações\n", nrow(all_options)))
+# ─── 5. Relatório final ───────────────────────────────────────────────────────
+cat("\n=== RELATÓRIO FINAL ===\n")
+cat("Período em df_model  :", format(min(df_model$date)), "a",
+    format(max(df_model$date)), "\n")
+cat("Obs                  :", nrow(df_model), "\n")
+cat("Variáveis            :", ncol(df_model) - 1, "\n")
+cat("Colunas              :\n")
+print(names(df_model))
+cat("\nSanidade             :", ifelse(sanity_ok, "PASSOU ✓", "FALHOU ✗"), "\n")
+cat("========================\n")

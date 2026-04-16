@@ -94,7 +94,13 @@ if (length(data_dirs) == 0)
 run_folder <- tail(data_dirs, 1)
 cat(sprintf("Dados de: %s\n", run_folder))
 
-load(file.path(run_folder, "df_model.rda"))
+#load(file.path(run_folder, "df_model.rda")) # como estou usando da nathalia essa linha
+# fica hidden, mas se for usar o df_model, descomentar essa linha e comentar as linhas abaixo
+
+load(file.path(run_folder, "df.rda"))
+df_model <- df
+
+
 load(file.path(run_folder, "df_targets.rda"))
 load(file.path(run_folder, "df_panel_pca.rda"))
 load(file.path(run_folder, "targets_br.rda"))
