@@ -18,6 +18,9 @@
 library(here)
 setwd(here("forecasting_inflation"))
 
+install.packages("pracma")
+
+library(pracma)
 library(glmnet)
 library(tidyverse)
 
@@ -46,7 +49,7 @@ nwindows   <- 312     # mesmo valor do 03_call_model.R adaptado
 
 
 # ============================================================
-# Carrega data.rda (pedido do professor Hudson)
+# Carrega data.rda
 # ============================================================
 
 load("data/data.rda")

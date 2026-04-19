@@ -1,9 +1,11 @@
 library(here)
 setwd(here("forecasting_inflation"))
 
+install.packages("pak")
+
 ### must add package for specific models ###
-# library(devtools)
-# pak::pak("gabrielrvsc/HDeconometrics")
+ library(devtools)
+ pak::pak("gabrielrvsc/HDeconometrics")
 library(HDeconometrics)
 library(glmnet)
 library(randomForest)
