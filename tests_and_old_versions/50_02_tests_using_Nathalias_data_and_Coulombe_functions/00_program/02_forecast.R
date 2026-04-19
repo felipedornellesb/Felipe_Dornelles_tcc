@@ -415,6 +415,10 @@ for (row_i in seq_len(nrow(combos))) {
 cat(sprintf("\n=== POOS finalizado em %.1f min ===\n",
             (proc.time() - t0_total)["elapsed"] / 60))
 
+
+# Adicionar outro dado ou ao forecast os betas para executar a previsão e executar com os betas alterando com o tempo.
+
+
 # ============================================================
 # 9. DIAGNÓSTICO (MODO TESTE)
 # ============================================================

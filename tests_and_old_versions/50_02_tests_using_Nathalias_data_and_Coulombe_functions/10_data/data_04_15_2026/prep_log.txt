@@ -1,0 +1,6 @@
+[2026-04-16 18:27:01] Iniciando 01_data_prep_v2.R 
+[2026-04-16 18:27:03] Catálogo: 141 séries 
+[2026-04-16 18:27:04] Download IPEA... 
+[2026-04-16 18:28:21] Download OK: 115 séries 
+[2026-04-16 18:28:21] Wide: 1048 obs x 117 colunas | classe date: Date 
+[2026-04-16 18:28:22] Filtrado: 281 obs x 116 preditores 

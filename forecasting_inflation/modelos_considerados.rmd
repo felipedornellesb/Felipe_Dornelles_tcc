@@ -1,0 +1,23 @@
+* LASSO family: x
+  - LASSO
+  - adaptive LASSO (adaLASSO)
+  - elastic net (ElNet)
+  - adaptive elastic net (adaElNet)
+
+* Ridge regression (RR) x
+
+* Bayesian vector autoregressions (BVAR) ?
+
+* Principal component factors x
+
+* Target factors (T. Factor) x
+
+* Linear ensemble methods:
+  - bagging x
+  - boosted factors (B. Factor) ?
+  - complete subset regressions (CSR) x
+  - jackknife model averaging (JMA) ?
+
+* Random forest (RF) x
+
+
