@@ -20,4 +20,6 @@
 
 * Random forest (RF) x
 
-
+ EM_sw é um algoritmo EM para imputar NAs via Stock-Watson. Como o data.rda do Medeiros já vem tratado (sem NAs significativos), não é necessário rodar o EM_sw. O modelo 2SRR do Coulombe é uma espécie de RR com penalização adaptativa, e tem um código específico para isso. Por isso, o script 03_call_model_felipe.R roda apenas o modelo 2SRR, e os outros modelos (LASSO family, RF, etc.) são rodados em outros scripts (ex: 03_lasso_family.R, 03_random_forest.R, etc.).
+ Basicamente, o Medeiros já tratou.
+ 

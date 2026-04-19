@@ -15,10 +15,11 @@
 # Ordem de execução:
 #   01 → 02 → 03 (outros modelos) → 03_call_model_felipe.R → 04_eval_results.R
 # ============================================================
-library(here)
-setwd(here("forecasting_inflation"))
 
-install.packages("pracma")
+install.packages("pracma", "here")
+
+library(here)
+setwd(here("tcc/Felipe_Dornelles_tcc/forecasting_inflation"))
 
 library(pracma)
 library(glmnet)
@@ -33,12 +34,12 @@ source("functions/felipe_functions.R")
 # Engine rolling window do Medeiros
 source("functions/rolling_window.R")
 
-# Funções do Coulombe — ajustar o caminho
+# Funções do Coulombe
 source("coulombe/TVPRRcosso_v181120.R")
 source("coulombe/zfun_v190304.R")
 source("coulombe/fastZrot_v181125.R")
 source("coulombe/CVGSBHK_v181127.R")
-
+source("coulombe/Xgenerators_v190127.R")   # make_reg_matrix
 
 # ============================================================
 # Parâmetros

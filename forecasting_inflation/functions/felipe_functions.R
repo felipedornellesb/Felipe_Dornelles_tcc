@@ -40,42 +40,149 @@
 #                 lambda selecionado por CV, e metadados
 #   )
 # ============================================================
-
-run2srr <- function(ind, df, variable, horizon,
-                    lambda_vec  = exp(seq(-6, 20, length.out = 15)),
-                    kfold       = 5,
-                    alpha_2srr  = 0.01,
-                    silent      = 1) {
-
+#run2srr <- function(ind, df, variable, horizon,
+#                    lambda_vec  = exp(seq(-6, 20, length.out = 15)),
+#                    kfold       = 5,
+#                    alpha_2srr  = 0.01,
+#                    silent      = 1) {
+#
   # --- 1. Prepara dados usando dataprep() do Medeiros (nofact = TRUE) ---
   # nofact = TRUE: sem PCA, usa todas as variáveis diretamente
   # O 2SRR lida com alta dimensão nativamente via regularização
-  prep  <- dataprep(ind, df, variable, horizon, nofact = TRUE)
-  Xin   <- prep$Xin
-  yin   <- prep$yin
-  Xout  <- as.numeric(prep$Xout)
-
+#  prep  <- dataprep(ind, df, variable, horizon, nofact = TRUE)
+#  Xin   <- prep$Xin
+#  yin   <- prep$yin
+#  Xout  <- as.numeric(prep$Xout)
+#
   # --- 2. Ridge via glmnet como fallback e para obter lambda2 inicial ---
   # lambda2 é o parâmetro de Ridge do segundo estágio do 2SRR
+#  pred_ridge <- NA_real_
+#  lv2        <- 1.0
+#
+#  tryCatch({
+#    cv_r       <- glmnet::cv.glmnet(x = Xin, y = yin,
+#                                     alpha = 0, nfolds = kfold,
+#                                     family = "gaussian")
+#    mdl_r      <- glmnet::glmnet(x = Xin, y = yin,
+#                                  alpha = 0, lambda = cv_r$lambda.min,
+#                                  family = "gaussian")
+#    pred_ridge <- as.numeric(
+#      predict(mdl_r, newx = matrix(Xout, nrow = 1))
+#    )
+#    lv2        <- cv_r$lambda.min
+#  }, error = function(e) {
+#    message(sprintf("[run2srr | Ridge fallback] Erro: %s", e$message))
+#  })
+#
+  # --- 3. Estimação 2SRR via TVPRR_cosso (type = 2) ---
+#  forecast   <- NA_real_
+#  betas_tvp  <- NULL
+#  lambda_sel <- NA_real_
+#
+#  tryCatch({
+#    fit <- TVPRR_cosso(
+#      y         = yin,
+#      X         = Xin,
+#      lambdavec = lambda_vec,
+#      sweigths  = 1,
+#      type      = 2,          # type = 2 → 2SRR (Coulombe)
+#      alpha     = alpha_2srr,
+#      silent    = silent,
+#      kfold     = kfold,
+#      lambda2   = lv2,
+#      tol       = 1e-6,
+#      maxit     = 10,
+#      oosX      = Xout
+#    )# fit$fcast é a previsão em nível, igual ao Coulombe. 
+#Para converter para h-ahead acumulada, descontamos last[1] (último valor observado da variável alvo) 
+#— igual ao que o Coulombe faz no código dele.
+#
+#    forecast   <- as.numeric(fit$fcast)
+#    lambda_sel <- fit$lambda         # lambda ótimo selecionado por CV
+#    betas_tvp  <- fit$beta           # matrix T x K — betas time-varying
+                                     # cada linha = um período no tempo
+                                     # cada coluna = uma variável
+
+    # Outlier filter: se previsão absurda, usa Ridge como fallback
+#    y_mean <- mean(yin, na.rm = TRUE)
+#    y_sd   <- sd(yin,   na.rm = TRUE)
+#    if (!is.finite(forecast) ||
+#        abs(forecast - y_mean) > 6 * y_sd) {
+#      if (is.finite(pred_ridge)) {
+#        message("[run2srr] Previsão fora dos limites — usando Ridge como fallback.")
+#        forecast <- pred_ridge
+#      }
+#    }
+#
+#  }, error = function(e) {
+#    message(sprintf("[run2srr | 2SRR] Erro: %s", e$message))
+#    if (is.finite(pred_ridge)) forecast <<- pred_ridge
+#  })
+#
+  # --- 4. Monta outputs ---
+#  outputs <- list(
+#    betas_time_varying = betas_tvp,   # PRINCIPAL: betas no tempo
+#    lambda             = lambda_sel,  # lambda CV ótimo
+#    ridge_fallback     = pred_ridge,  # benchmark interno
+#    n_obs              = length(yin),
+#    n_vars             = ncol(Xin)
+#  )
+#
+#  return(list(forecast = forecast, outputs = outputs))
+# } 
+
+run2srr <- function(ind, df, variable, horizon,
+                    lambda_vec  = exp(seq(-2, 12, length.out = 15)),
+                    kfold       = 5,
+                    alpha_2srr  = 0.01,
+                    silent      = 1,
+                    ly          = 2,
+                    lf          = 2) {
+
+  # --- 1. Subset da janela ---
+  df_w <- df[ind, ]
+
+  y       <- as.matrix(df_w[, variable, drop = FALSE])
+  factors <- as.matrix(df_w)          # todas as variáveis como fatores
+  Y       <- y                         # regressor AR (própria variável)
+
+  # --- 2. Constrói matriz de regressores NO PADRÃO COULOMBE ---
+  # make_reg_matrix vem de Xgenerators_v190127.R
+  # Estrutura: col 1 = y h-ahead acumulada, col 2+ = lags y + lags fatores
+  train_full <- make_reg_matrix(y    = y,
+                                 Y    = Y,
+                                 factors = factors,
+                                 h    = horizon,
+                                 ly   = ly,
+                                 lf   = lf)
+
+  # Remove lags iniciais (maxlag) e separa last (Xout)
+  maxlag <- max(lf, ly)
+  train_full <- train_full[(maxlag + 1):nrow(train_full), ]
+  train_full <- as.matrix(train_full[complete.cases(train_full), ])
+
+  last  <- train_full[nrow(train_full), ]          # Xout = última linha
+  train <- train_full[1:(nrow(train_full) - horizon), ]  # janela de treino
+
+  yin  <- train[, 1]           # dependente acumulada h-ahead
+  Xin  <- train[, -1]          # regressores
+  Xout <- as.numeric(last[-1]) # regressores da última observação
+
+  # --- 3. Ridge como fallback e lambda2 inicial ---
   pred_ridge <- NA_real_
   lv2        <- 1.0
 
   tryCatch({
     cv_r       <- glmnet::cv.glmnet(x = Xin, y = yin,
-                                     alpha = 0, nfolds = kfold,
-                                     family = "gaussian")
+                                     alpha = 0, nfolds = kfold)
     mdl_r      <- glmnet::glmnet(x = Xin, y = yin,
-                                  alpha = 0, lambda = cv_r$lambda.min,
-                                  family = "gaussian")
-    pred_ridge <- as.numeric(
-      predict(mdl_r, newx = matrix(Xout, nrow = 1))
-    )
+                                  alpha = 0, lambda = cv_r$lambda.min)
+    pred_ridge <- as.numeric(predict(mdl_r, newx = matrix(Xout, nrow=1)))
     lv2        <- cv_r$lambda.min
-  }, error = function(e) {
-    message(sprintf("[run2srr | Ridge fallback] Erro: %s", e$message))
-  })
+  }, error = function(e)
+    message(sprintf("[run2srr | Ridge fallback] Erro: %s", e$message)))
 
-  # --- 3. Estimação 2SRR via TVPRR_cosso (type = 2) ---
+  # --- 4. Estimação 2SRR ---
   forecast   <- NA_real_
   betas_tvp  <- NULL
   lambda_sel <- NA_real_
@@ -86,7 +193,7 @@ run2srr <- function(ind, df, variable, horizon,
       X         = Xin,
       lambdavec = lambda_vec,
       sweigths  = 1,
-      type      = 2,          # type = 2 → 2SRR (Coulombe)
+      type      = 2,
       alpha     = alpha_2srr,
       silent    = silent,
       kfold     = kfold,
@@ -96,33 +203,28 @@ run2srr <- function(ind, df, variable, horizon,
       oosX      = Xout
     )
 
-    forecast   <- as.numeric(fit$fcast)
-    lambda_sel <- fit$lambda         # lambda ótimo selecionado por CV
-    betas_tvp  <- fit$beta           # matrix T x K — betas time-varying
-                                     # cada linha = um período no tempo
-                                     # cada coluna = uma variável
+    # Previsão: desconta last[1] igual ao Coulombe
+    raw_fcast  <- as.numeric(fit$fcast)
+    forecast   <- raw_fcast - last[1]   # ← conversão de nível, igual ao Coulombe
+    lambda_sel <- fit$lambda
+    betas_tvp  <- fit$beta
 
-    # Outlier filter: se previsão absurda, usa Ridge como fallback
-    y_mean <- mean(yin, na.rm = TRUE)
-    y_sd   <- sd(yin,   na.rm = TRUE)
-    if (!is.finite(forecast) ||
-        abs(forecast - y_mean) > 6 * y_sd) {
-      if (is.finite(pred_ridge)) {
-        message("[run2srr] Previsão fora dos limites — usando Ridge como fallback.")
-        forecast <- pred_ridge
-      }
-    }
+    # Outlier filter (igual ao Coulombe)
+    y_mean <- mean(yin)
+    cond_max <- (forecast - y_mean) > 2 * (max(yin) - y_mean)
+    cond_min <- (forecast - y_mean) < 2 * (min(yin) - y_mean)
+    if ((cond_max || cond_min) && is.finite(pred_ridge))
+      forecast <- pred_ridge - last[1]
 
   }, error = function(e) {
     message(sprintf("[run2srr | 2SRR] Erro: %s", e$message))
-    if (is.finite(pred_ridge)) forecast <<- pred_ridge
+    if (is.finite(pred_ridge)) forecast <<- pred_ridge - last[1]
   })
 
-  # --- 4. Monta outputs ---
   outputs <- list(
-    betas_time_varying = betas_tvp,   # PRINCIPAL: betas no tempo
-    lambda             = lambda_sel,  # lambda CV ótimo
-    ridge_fallback     = pred_ridge,  # benchmark interno
+    betas_time_varying = betas_tvp,
+    lambda             = lambda_sel,
+    ridge_fallback     = pred_ridge,
     n_obs              = length(yin),
     n_vars             = ncol(Xin)
   )
