@@ -1,3 +1,6 @@
+library(here)
+setwd(here("forecasting_inflation"))
+
 library(tidyverse)
 
 load("forecasts/yout.rda")

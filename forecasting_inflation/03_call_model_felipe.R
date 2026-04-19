@@ -15,6 +15,8 @@
 # Ordem de execução:
 #   01 → 02 → 03 (outros modelos) → 03_call_model_felipe.R → 04_eval_results.R
 # ============================================================
+library(here)
+setwd(here("forecasting_inflation"))
 
 library(glmnet)
 library(tidyverse)

@@ -1,3 +1,5 @@
+library(here)
+setwd(here("forecasting_inflation"))
 
 #### gets out of sample y and computes random walk forecasts ###
 library(roll)

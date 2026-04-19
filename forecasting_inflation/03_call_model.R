@@ -1,3 +1,6 @@
+library(here)
+setwd(here("forecasting_inflation"))
+
 ### must add package for specific models ###
 # library(devtools)
 # pak::pak("gabrielrvsc/HDeconometrics")

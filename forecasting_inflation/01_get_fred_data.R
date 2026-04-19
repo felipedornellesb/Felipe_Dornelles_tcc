@@ -1,3 +1,5 @@
+library(here)
+setwd(here("forecasting_inflation"))
 
 # must install FRED package
 # library(devtools)
