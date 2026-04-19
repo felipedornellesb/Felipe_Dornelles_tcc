@@ -130,7 +130,6 @@ run2srr <- function(ind, df, variable, horizon,
   return(list(forecast = forecast, outputs = outputs))
 }
 
-
 # ============================================================
 # extract_betas_over_time()
 #
