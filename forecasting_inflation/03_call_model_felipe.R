@@ -16,14 +16,18 @@
 #   01 → 02 → 03 (outros modelos) → 03_call_model_felipe.R → 04_eval_results.R
 # ============================================================
 
-install.packages("pracma", "here")
+install.packages("pracma", "here", "fGarch")
+
+install.packages("fGarch")
 
 library(here)
-setwd(here("tcc/Felipe_Dornelles_tcc/forecasting_inflation"))
+setwd(here("~tcc/Felipe_Dornelles_tcc/forecasting_inflation"))
 
 library(pracma)
 library(glmnet)
 library(tidyverse)
+library(fGarch)
+library(timeSeries)
 
 # Funções do Medeiros (dataprep, accumulate_model, etc.)
 source("functions/functions.R")
@@ -40,6 +44,7 @@ source("coulombe/zfun_v190304.R")
 source("coulombe/fastZrot_v181125.R")
 source("coulombe/CVGSBHK_v181127.R")
 source("coulombe/Xgenerators_v190127.R")   # make_reg_matrix
+source("coulombe/dualGRRmdA_v190215.R")
 
 # ============================================================
 # Parâmetros
@@ -65,6 +70,19 @@ cat("Dados carregados:", nrow(data), "observações,",
 cat("Período:", rownames(data)[1], "a",
     rownames(data)[nrow(data)], "\n\n")
 
+
+# ============================================================
+# Testar uma unica janela
+# ===========================================================
+ind_teste <- 1:312
+
+prep <- dataprep(ind_teste, data, "CPIAUCSL", horizon = 1, nofact = TRUE)
+
+cat("Dimensão Xin:  ", dim(prep$Xin), "\n")
+cat("Comprimento yin:", length(prep$yin), "\n")
+cat("Dimensão Xout: ", dim(prep$Xout), "\n")
+cat("Xout tem NA?   ", any(is.na(prep$Xout)), "\n")
+cat("Xout:          ", prep$Xout[1:5], "\n")
 
 # ============================================================
 # Rolling window — horizontes 1 a 12
