@@ -16,35 +16,25 @@
 #   01 → 02 → 03 (outros modelos) → 03_call_model_felipe.R → 04_eval_results.R
 # ============================================================
 
-install.packages("pracma", "here", "fGarch")
-
-install.packages("fGarch")
+pkgs <- c("here", "glmnet", "tidyverse", "rugarch")
+new  <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
+if (length(new)) install.packages(new)
 
 library(here)
-setwd(here("~tcc/Felipe_Dornelles_tcc/forecasting_inflation"))
+setwd(here("forecasting_inflation"))
 
-library(pracma)
+library(rugarch)
 library(glmnet)
 library(tidyverse)
-library(fGarch)
-library(timeSeries)
 
 # Funções do Medeiros (dataprep, accumulate_model, etc.)
 source("functions/functions.R")
 
-# Funções do 2SRR (run2srr, extract_betas_over_time)
-source("functions/felipe_functions.R")
+# Implementação 2SRR (Coulombe 2024) — R moderno, sem dependências externas
+source("functions/tvp_ridge_functions.R")  # make_ZZt, tvp_2srr, run2srr, etc.
 
 # Engine rolling window do Medeiros
 source("functions/rolling_window.R")
-
-# Funções do Coulombe
-source("coulombe/TVPRRcosso_v181120.R")
-source("coulombe/zfun_v190304.R")
-source("coulombe/fastZrot_v181125.R")
-source("coulombe/CVGSBHK_v181127.R")
-source("coulombe/Xgenerators_v190127.R")   # make_reg_matrix
-source("coulombe/dualGRRmdA_v190215.R")
 
 # ============================================================
 # Parâmetros
@@ -72,38 +62,41 @@ cat("Período:", rownames(data)[1], "a",
 
 
 # ============================================================
-# Testar uma unica janela
-# ===========================================================
-ind_teste <- 1:312
+# Diagnóstico de uma janela (descomentar para testar antes do loop)
+# ============================================================
 
-prep <- dataprep(ind_teste, data, "CPIAUCSL", horizon = 1, nofact = TRUE)
+if (FALSE) {
+  ind_teste <- 1:nwindows
+  prep <- dataprep(ind_teste, data, "CPIAUCSL", horizon = 1, nofact = TRUE)
+  cat("Xin:", dim(prep$Xin), "| yin:", length(prep$yin),
+      "| NAs em Xout:", any(is.na(prep$Xout)), "\n")
 
-cat("Dimensão Xin:  ", dim(prep$Xin), "\n")
-cat("Comprimento yin:", length(prep$yin), "\n")
-cat("Dimensão Xout: ", dim(prep$Xout), "\n")
-cat("Xout tem NA?   ", any(is.na(prep$Xout)), "\n")
-cat("Xout:          ", prep$Xout[1:5], "\n")
-
+  # Teste de 1 janela do 2SRR (lento ~30s — só para validar)
+  t0  <- proc.time()
+  r1  <- run2srr(ind_teste, data, "CPIAUCSL", horizon = 1)
+  cat(sprintf("Forecast h=1 teste: %.6f (%.1fs)\n",
+              r1$forecast, (proc.time() - t0)[3]))
+}
 # ============================================================
 # Rolling window — horizontes 1 a 12
 # ============================================================
 
 model_list <- list()
+t_total    <- proc.time()
 
 for (i in 1:12) {
   cat(sprintf("Rodando horizonte h = %d ...\n", i))
+  t0 <- proc.time()
 
   model_list[[i]] <- rolling_window(
-    run2srr,
-    data,
-    nwindows + i - 1,
-    i,
-    "CPIAUCSL"
+    run2srr, data, nwindows + i - 1, i, "CPIAUCSL"
   )
 
-  cat(sprintf("  Horizonte %d concluído.\n", i))
+  cat(sprintf("  h = %d concluído em %.1f min\n",
+              i, (proc.time() - t0)[3] / 60))
 }
 
+cat(sprintf("\nTotal: %.1f min\n", (proc.time() - t_total)[3] / 60))
 
 # ============================================================
 # Consolida forecasts no formato padrão do Medeiros

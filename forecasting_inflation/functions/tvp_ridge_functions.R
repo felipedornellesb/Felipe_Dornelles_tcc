@@ -18,161 +18,148 @@
 #
 # Dependências: glmnet, Matrix, rugarch (ou fGarch como fallback)
 # ==============================================================
-
-
 # ==============================================================
-# 1. Construção da matriz Z (reparametrização do artigo, Seção 2.2)
+# 1. make_ZZt — ZZ' e Z'y sem montar Z explicitamente
 # ==============================================================
-# Z = W * C
-# W = diagblock(X1, ..., XK)  — T x KT
-# C = I_K ⊗ C0               — KT x KT
-# C0 = lower triangular de 1s (cumulativa, random walk)
-# Resultado: Z é T x KT, estrutura em blocos (Eq. Z no artigo)
-#
-# Para o dual, só precisamos de Z Z' (T x T), que é computável
-# como sum_k (X_k * C0) * (X_k * C0)' de forma eficiente.
-# ==============================================================
+# FIX-1: seq_len(K) em vez de 1:K
+# FIX-5: usa C0 * xk (broadcast column-wise) em vez de outer()
+#   C0 * xk equivale a sweep(C0, 1, xk, "*")
+#   É numericamente idêntico mas evita alocar T×T temporário K vezes.
 
-#' Calcula Z %*% t(Z) e Z %*% y diretamente (sem montar Z explicitamente)
-#' @param X  matrix T x K — regressores no tempo
-#' @param y  vector T     — variável dependente
-#' @return list(ZZt = T×T, Zty = T×1, C0 = T×T)
 make_ZZt <- function(X, y) {
   T_obs <- nrow(X)
   K     <- ncol(X)
 
-  # Matriz cumulativa C0 (lower triangular de 1s) — random walk
-  C0  <- matrix(0, T_obs, T_obs)
-  for (i in 1:T_obs) C0[i, 1:i] <- 1
+  if (K == 0L) {
+    return(list(
+      ZZt   = matrix(0, T_obs, T_obs),
+      Zty   = numeric(T_obs),
+      C0    = matrix(0, T_obs, T_obs),
+      K     = 0L,
+      T_obs = T_obs
+    ))
+  }
 
-  # ZZ' = sum_{k=1}^{K} (X_k * C0) (X_k * C0)'
-  # Onde X_k * C0: cada linha t de Z_k é X[t,k] * C0[t,]
-  # (X_k * C0)' * (X_k * C0) contribui para ZZ' como outer product escalado
+  # C0: lower triangular de 1s (random-walk cumulativa)
+  C0  <- matrix(0, T_obs, T_obs)
+  for (i in seq_len(T_obs)) C0[i, seq_len(i)] <- 1L
+
   ZZt <- matrix(0, T_obs, T_obs)
   Zty <- numeric(T_obs)
 
-  for (k in 1:K) {
-    xk   <- X[, k]               # vetor T
-    Zk   <- outer(xk, rep(1, T_obs)) * C0  # T x T: Zk[t,s] = X[t,k]*C0[t,s]
-    ZZt  <- ZZt + tcrossprod(Zk)            # T x T
-    Zty  <- Zty + Zk %*% y
+  # FIX-5: C0 * xk multiplica cada LINHA t de C0 por X[t,k]
+  # (R recicla xk como vetor coluna quando aplicado sobre matriz por linhas)
+  # Equivalente a sweep(C0, 1, xk, "*") mas sem overhead de sweep()
+  for (k in seq_len(K)) {
+    Zk  <- C0 * X[, k]           # T×T: Zk[t,s] = C0[t,s] * X[t,k]
+    ZZt <- ZZt + crossprod(Zk)   # t(Zk) %*% Zk — equivale a tcrossprod(t(Zk))
+    Zty <- Zty + t(Zk) %*% y
   }
 
-  list(ZZt = ZZt, Zty = Zty, C0 = C0, K = K, T_obs = T_obs)
+  list(ZZt = ZZt, Zty = as.numeric(Zty), C0 = C0, K = K, T_obs = T_obs)
 }
 
 
 # ==============================================================
-# 2. Solução dual da ridge (Eq. 9 e 11 do artigo)
-# ==============================================================
-# Solução: θ = C * Z' * (Z*Z' + λ*I_T)^{-1} * y
-# Para previsão fora da amostra usamos apenas α = (ZZ'+λI)^{-1} * Zy
-# e depois fcast = Zout * C * α equivalente via:
-#   fcast = Zout' * α  onde Zout é o vetor de regressores OOS expandido
-#
-# Versão com matrizes de peso Omega (param variances) e Sigma (resid var):
-# θ = C * Omega^{1/2} * Z̃' * (Z̃*Z̃' + λ*I)^{-1} * ỹ
-# onde Z̃ = Sigma^{-1/2} * Z * Omega^{1/2}, ỹ = Sigma^{-1/2} * y
+# 2. dual_solve — (ZZ' + λI)^{-1} Z'y
 # ==============================================================
 
-#' Solução dual ridge (numericamente estável via solve com ridge numérico)
-#' @param ZZt   T×T matrix Z*Z'
-#' @param Zty   T×1 vector Z'y
-#' @param lam   escalar lambda (penalidade)
-#' @param eps   regularização numérica adicional (default 1e-8)
-#' @return alpha — vetor T (dual solution)
 dual_solve <- function(ZZt, Zty, lam, eps = 1e-8) {
   T_obs <- nrow(ZZt)
-  # (ZZ' + λ*I + eps*I)^{-1} * Z'y
-  # eps protege contra singularidade numérica
   M     <- ZZt + (lam + eps) * diag(T_obs)
   alpha <- tryCatch(
     solve(M, Zty),
-    error = function(e) {
-      # fallback: aumenta regularização se ainda singular
-      solve(M + 1e-4 * diag(T_obs), Zty)
-    }
+    error = function(e) tryCatch(
+      solve(M + 1e-4 * diag(T_obs), Zty),
+      error = function(e2) rep(0, T_obs)
+    )
   )
   alpha
 }
 
 
-#' Recover beta paths (T x K matrix) from dual solution alpha
-#' β = C * Z' * α  = C * (sum_k diag(X_k) * C0)' * alpha
-#' Para cada k: β_k = C0 * diag(X_k)' * alpha = cumsum(X_k * (C0' * alpha))
-#' @param X     T×K matrix
-#' @param alpha T×1 dual solution
-#' @param C0    T×T lower triangular cumulative matrix
-#' @return beta T×K matrix of time-varying coefficients
+# ==============================================================
+# 3. recover_beta — paths β(t) a partir da solução dual
+# ==============================================================
+
 recover_beta <- function(X, alpha, C0) {
   T_obs <- nrow(X)
   K     <- ncol(X)
   beta  <- matrix(NA_real_, T_obs, K)
-  C0t   <- t(C0)  # T×T
+  C0t   <- t(C0)
 
-  for (k in 1:K) {
-    # Z_k' * alpha = (diag(X[,k]) * C0)' * alpha = C0' * (X[,k] * alpha)
-    Zkt_alpha  <- C0t %*% (X[, k] * alpha)  # T×1
-    # beta_k = C0 * Zkt_alpha (random walk: cumsum)
-    beta[, k]  <- C0 %*% Zkt_alpha
+  for (k in seq_len(K)) {
+    Zkt_alpha <- C0t %*% (X[, k] * alpha)
+    beta[, k] <- C0 %*% Zkt_alpha
   }
   beta
 }
 
 
-#' OOS forecast via dual solution
-#' fcast = x_out * beta_T = x_out * (últimos coeficientes)
-#' @param x_out  K×1 vetor de regressores OOS
-#' @param beta   T×K matrix (apenas a última linha é usada)
+# (auxiliar, exportado para uso externo se necessário)
 oos_forecast_from_beta <- function(x_out, beta) {
   sum(x_out * beta[nrow(beta), ])
 }
 
 
 # ==============================================================
-# 3. K-fold Cross Validation para selecionar lambda
+# 4. cv_ridge_dual — K-fold CV TEMPORAL para selecionar lambda
+# ==============================================================
+# FIX-4: folds temporais em vez de sample(folds).
+#   Em séries temporais, o fold de teste deve sempre ser POSTERIOR
+#   ao fold de treino. Usa "blocked time-series CV":
+#     - divide a série em kfold blocos contíguos por ordem temporal
+#     - para fold f: treina em 1:(inicio_f - 1), testa em bloco_f
+#   Isso evita vazamento de dados futuros para o treino.
+#   Ref: Bergmeir & Benítez (2012), Hyndman & Athanasopoulos (2021).
 # ==============================================================
 
-#' K-fold CV para o TVP ridge (dual)
-#' @param X       T×K matrix de regressores
-#' @param y       T×1 vetor dependente
-#' @param lambdas vetor de lambdas candidatos
-#' @param kfold   número de folds (default 5)
-#' @return lambda ótimo (scalar)
-cv_ridge_dual <- function(X, y, lambdas = exp(seq(-4, 20, length.out = 30)),
-                           kfold = 5) {
-  T_obs  <- nrow(X)
-  # divide em folds aleatórios (sem respeitar ordem temporal — OK para k-fold
-  # em séries com lags suficientes, cf. Bergmeir et al. 2018 citado no artigo)
-  folds  <- cut(seq_len(T_obs), breaks = kfold, labels = FALSE)
-  folds  <- sample(folds)  # embaralha
+cv_ridge_dual <- function(X, y,
+                           lambdas = exp(seq(-4, 20, length.out = 30)),
+                           kfold   = 5) {
+  T_obs <- nrow(X)
+
+  # FIX-4: folds temporais contíguos (NÃO embaralhados)
+  # Bloco mínimo: pelo menos 10 obs de treino antes do primeiro fold
+  min_train <- max(10L, floor(T_obs * 0.3))
+  usable    <- T_obs - min_train          # obs disponíveis para testar
+  fold_size <- max(1L, floor(usable / kfold))
 
   cv_mse <- numeric(length(lambdas))
 
   for (li in seq_along(lambdas)) {
     lam    <- lambdas[li]
-    errors <- numeric(T_obs)
+    sq_err <- numeric(kfold)
+    n_err  <- integer(kfold)
 
-    for (f in 1:kfold) {
-      test_idx  <- which(folds == f)
-      train_idx <- which(folds != f)
+    for (f in seq_len(kfold)) {
+      test_end   <- min_train + f * fold_size
+      test_start <- min_train + (f - 1L) * fold_size + 1L
+      if (test_start > T_obs) break
+      test_end   <- min(test_end, T_obs)
 
-      X_tr  <- X[train_idx, , drop = FALSE]
-      y_tr  <- y[train_idx]
-      X_te  <- X[test_idx,  , drop = FALSE]
-      y_te  <- y[test_idx]
+      train_idx <- seq_len(test_start - 1L)
+      test_idx  <- test_start:test_end
 
-      # Computa ZZt e Zty no conjunto de treino
-      zz    <- make_ZZt(X_tr, y_tr)
-      alpha <- dual_solve(zz$ZZt, zz$Zty, lam)
-      beta  <- recover_beta(X_tr, alpha, zz$C0)
-      beta_T <- beta[nrow(beta), ]  # coefs no fim do treino
+      X_tr <- X[train_idx, , drop = FALSE]
+      y_tr <- y[train_idx]
+      X_te <- X[test_idx,  , drop = FALSE]
+      y_te <- y[test_idx]
 
-      # Previsão para cada obs de teste (usa beta fixo do treino)
-      y_hat <- X_te %*% beta_T
-      errors[test_idx] <- y_te - y_hat
+      if (length(train_idx) < 5L || length(test_idx) < 1L) next
+
+      zz     <- make_ZZt(X_tr, y_tr)
+      alpha  <- dual_solve(zz$ZZt, zz$Zty, lam)
+      beta   <- recover_beta(X_tr, alpha, zz$C0)
+      beta_T <- beta[nrow(beta), ]     # betas do fim do treino
+
+      y_hat      <- X_te %*% beta_T
+      sq_err[f]  <- sum((y_te - y_hat)^2, na.rm = TRUE)
+      n_err[f]   <- length(y_te)
     }
-    cv_mse[li] <- mean(errors^2, na.rm = TRUE)
+
+    total_n <- sum(n_err)
+    cv_mse[li] <- if (total_n > 0) sum(sq_err) / total_n else Inf
   }
 
   lambdas[which.min(cv_mse)]
@@ -180,288 +167,238 @@ cv_ridge_dual <- function(X, y, lambdas = exp(seq(-4, 20, length.out = 30)),
 
 
 # ==============================================================
-# 4. Step 1 do 2SRR: TVP ridge homogêneo (Eq. 9)
+# 5. tvp_1srr — Step 1: Ridge TVP homogêneo (Eq. 9)
 # ==============================================================
 
 tvp_1srr <- function(X, y, kfold = 5,
                       lambdas = exp(seq(-4, 20, length.out = 30))) {
-  # Seleciona lambda por CV
   lam_opt <- cv_ridge_dual(X, y, lambdas = lambdas, kfold = kfold)
-
-  # Estimação final com lambda ótimo
   zz      <- make_ZZt(X, y)
   alpha   <- dual_solve(zz$ZZt, zz$Zty, lam_opt)
   beta    <- recover_beta(X, alpha, zz$C0)
   resid   <- y - rowSums(X * beta)
 
-  list(beta = beta, resid = resid, lambda = lam_opt,
-       alpha = alpha, ZZt = zz$ZZt, C0 = zz$C0)
+  list(beta    = beta,
+       resid   = resid,
+       lambda  = lam_opt,
+       alpha   = alpha,
+       ZZt     = zz$ZZt,
+       C0      = zz$C0)
 }
 
 
 # ==============================================================
-# 5. Estimação de Sigma e Omega (passos 2 e 3 do Algorithm 1)
+# 6. estimate_sigma2 — variâncias dos resíduos (Passo 2)
 # ==============================================================
+# FIX-2: fallback robusto via soma de quadrados manual.
+#   var() com n=1 retorna NA; sum((r - mean(r))^2)/(n-1) com n<2
+#   é tratado explicitamente com prior = var global.
 
-#' Estima variâncias de resíduos via GARCH(1,1) — passo 2 do artigo
-#' Usa rugarch como backend moderno; fallback para variância móvel
-#' @param resid  vetor T de resíduos
-#' @return sigma2 vetor T de variâncias condicionais (normalizadas com média=1)
 estimate_sigma2 <- function(resid) {
-  T_obs  <- length(resid)
-  sigma2 <- rep(1, T_obs)
+  T_obs   <- length(resid)
+  sigma2  <- rep(1, T_obs)
+  fit_ok  <- FALSE
 
-  # Tenta GARCH(1,1) via rugarch (moderno, substitui fGarch)
-  fit_ok <- FALSE
   if (requireNamespace("rugarch", quietly = TRUE)) {
     tryCatch({
       spec <- rugarch::ugarchspec(
-        variance.model  = list(model = "sGARCH", garchOrder = c(1, 1)),
-        mean.model      = list(armaOrder = c(0, 0), include.mean = TRUE),
+        variance.model     = list(model = "sGARCH", garchOrder = c(1, 1)),
+        mean.model         = list(armaOrder = c(0, 0), include.mean = TRUE),
         distribution.model = "norm"
       )
-      fit  <- rugarch::ugarchfit(spec = spec, data = resid,
-                                  solver = "hybrid", solver.control = list(trace = 0))
-      sigma2  <- as.numeric(rugarch::sigma(fit))^2
-      fit_ok  <- TRUE
+      fit  <- rugarch::ugarchfit(spec  = spec, data = resid,
+                                  solver = "hybrid",
+                                  solver.control = list(trace = 0))
+      s2   <- as.numeric(rugarch::sigma(fit))^2
+      if (all(is.finite(s2)) && all(s2 > 0)) {
+        sigma2 <- s2
+        fit_ok <- TRUE
+      }
     }, error = function(e) NULL)
   }
 
-  # Fallback: variância móvel (janela = 12) se GARCH falhar
+  # FIX-2: fallback — variância móvel expansiva (janela = 12)
   if (!fit_ok) {
-    for (t in 1:T_obs) {
-      window   <- max(1, t - 11):t
-      sigma2[t] <- var(resid[window], na.rm = TRUE)
+    var_global <- var(resid, na.rm = TRUE)
+    if (!is.finite(var_global) || var_global <= 0) var_global <- 1
+    win <- 12L
+    for (t in seq_len(T_obs)) {
+      idx <- max(1L, t - win + 1L):t
+      r   <- resid[idx]
+      n   <- length(r)
+      sigma2[t] <- if (n < 2L) var_global
+                   else sum((r - mean(r))^2) / (n - 1L)
     }
     sigma2 <- pmax(sigma2, 1e-8)
   }
 
-  # Normaliza: mean(sigma2) = 1 (conforme artigo)
-  sigma2 / mean(sigma2)
+  mu_s2 <- mean(sigma2, na.rm = TRUE)
+  if (!is.finite(mu_s2) || mu_s2 <= 0) return(rep(1, T_obs))
+  sigma2 / mu_s2
 }
 
 
-#' Estima variâncias dos parâmetros omega_k — passo 3 do artigo
-#' omega_k = (1/(T-1)) * sum_t (Δbeta_k,t)^2
-#' @param beta  T×K matrix de betas
-#' @return omega vetor K (normalizado com média = 1)
+# ==============================================================
+# 7. estimate_omega — variâncias dos parâmetros (Passo 3)
+# ==============================================================
+
 estimate_omega <- function(beta) {
-  T_obs  <- nrow(beta)
-  K      <- ncol(beta)
-  # Primeira diferença dos betas
-  dbeta  <- diff(beta)  # (T-1) x K
-  omega  <- colMeans(dbeta^2)
-  omega  <- pmax(omega, 1e-12)
-  # Normaliza: mean(omega) = 1
+  dbeta <- diff(beta)
+  omega <- colMeans(dbeta^2)
+  omega <- pmax(omega, 1e-12)
   omega / mean(omega)
 }
 
 
 # ==============================================================
-# 6. Step 2 do 2SRR: solução GLS ponderada (Eq. 11 do artigo)
+# 8. tvp_2srr — Step 2: GLS ponderado (Eq. 11)
 # ==============================================================
-# θ̃ = C Ω^{1/2} Z̃' (Z̃Z̃' + λI)^{-1} ỹ
-# Z̃ = Σ^{-1/2} Z Ω^{1/2},  ỹ = Σ^{-1/2} y
-# O que equivale a reescalar: X̃[t,k] = X[t,k] * sqrt(omega[k]) / sigma[t]
-#                              ỹ[t]    = y[t] / sigma[t]
-# e rodar o ridge homogêneo em X̃, ỹ
 
 tvp_2srr <- function(X, y, kfold = 5,
                       lambdas = exp(seq(-4, 20, length.out = 30))) {
 
-  # --- Passo 1: ridge homogêneo ---
-  step1 <- tvp_1srr(X, y, kfold = kfold, lambdas = lambdas)
-
-  # --- Passo 2: estima sigma2 e omega ---
-  sigma2 <- estimate_sigma2(step1$resid)
-  omega  <- estimate_omega(step1$beta)
-
-  # --- GLS rescaling ---
-  inv_sigma <- 1 / sqrt(pmax(sigma2, 1e-8))
+  step1      <- tvp_1srr(X, y, kfold = kfold, lambdas = lambdas)
+  sigma2     <- estimate_sigma2(step1$resid)
+  omega      <- estimate_omega(step1$beta)
+  inv_sigma  <- 1 / sqrt(pmax(sigma2, 1e-8))
   sqrt_omega <- sqrt(pmax(omega, 1e-12))
 
-  # X̃[t,k] = X[t,k] * sqrt(omega_k) / sigma_t
-  X_tilde <- sweep(X, 2, sqrt_omega, "*")        # escala colunas por omega
-  X_tilde <- sweep(X_tilde, 1, inv_sigma, "*")   # escala linhas por 1/sigma
+  X_tilde <- sweep(X,       2, sqrt_omega, "*")
+  X_tilde <- sweep(X_tilde, 1, inv_sigma,  "*")
   y_tilde <- y * inv_sigma
 
-  # --- Passo 2 CV + estimação final ---
-  lam_opt2 <- cv_ridge_dual(X_tilde, y_tilde, lambdas = lambdas, kfold = kfold)
-  zz2      <- make_ZZt(X_tilde, y_tilde)
-  alpha2   <- dual_solve(zz2$ZZt, zz2$Zty, lam_opt2)
-
-  # Recupera betas no espaço original:
-  # β_k(t) = sqrt(omega_k) * beta_tilde_k(t) (desescala)
+  lam_opt2   <- cv_ridge_dual(X_tilde, y_tilde,
+                               lambdas = lambdas, kfold = kfold)
+  zz2        <- make_ZZt(X_tilde, y_tilde)
+  alpha2     <- dual_solve(zz2$ZZt, zz2$Zty, lam_opt2)
   beta_tilde <- recover_beta(X_tilde, alpha2, zz2$C0)
   beta_orig  <- sweep(beta_tilde, 2, sqrt_omega, "*")
-
-  resid2 <- y - rowSums(X * beta_orig)
+  resid2     <- y - rowSums(X * beta_orig)
 
   list(
-    beta   = beta_orig,      # T×K betas time-varying no espaço original
-    resid  = resid2,
-    lambda = lam_opt2,
-    omega  = omega,
-    sigma2 = sigma2,
-    # step 1 info
-    beta_step1  = step1$beta,
-    lambda_step1 = step1$lambda
+    beta          = beta_orig,
+    resid         = resid2,
+    lambda        = lam_opt2,
+    omega         = omega,
+    sigma2        = sigma2,
+    beta_step1    = step1$beta,
+    lambda_step1  = step1$lambda
   )
 }
 
 
 # ==============================================================
-# 7. Previsão OOS com 2SRR
+# 9. run2srr — wrapper padrão Medeiros
 # ==============================================================
-#' Gera previsão h-passos à frente com 2SRR
-#' @param X_in   T×K — regressores in-sample
-#' @param y_in   T   — variável alvo in-sample
-#' @param x_out  K   — regressores OOS (um vetor)
-#' @param kfold  número de folds para CV
-#' @param lambdas vetor de lambdas candidatos
-#' @return list(forecast, beta, lambda, omega, sigma2)
-forecast_2srr <- function(X_in, y_in, x_out,
-                           kfold   = 5,
-                           lambdas = exp(seq(-4, 20, length.out = 25))) {
-
-  # Valida inputs
-  stopifnot(is.matrix(X_in), length(y_in) == nrow(X_in),
-            length(x_out) == ncol(X_in))
-  stopifnot(all(is.finite(X_in)), all(is.finite(y_in)),
-            all(is.finite(x_out)))
-
-  # Remove colunas com variância zero
-  col_var <- apply(X_in, 2, var, na.rm = TRUE)
-  good_cols <- col_var > 1e-10
-  if (sum(good_cols) < 2) {
-    warning("Menos de 2 colunas com variância > 0. Retornando NA.")
-    return(list(forecast = NA_real_, beta = NULL, lambda = NA,
-                omega = NULL, sigma2 = NULL))
-  }
-  X_in  <- X_in[, good_cols, drop = FALSE]
-  x_out <- x_out[good_cols]
-
-  # Padroniza X (mean=0, sd=1) para estabilidade numérica
-  X_means <- colMeans(X_in)
-  X_sds   <- apply(X_in, 2, sd)
-  X_sds[X_sds < 1e-10] <- 1
-  X_in_sc  <- sweep(sweep(X_in, 2, X_means, "-"), 2, X_sds, "/")
-  x_out_sc <- (x_out - X_means) / X_sds
-
-  # Roda 2SRR
-  fit <- tvp_2srr(X_in_sc, y_in, kfold = kfold, lambdas = lambdas)
-
-  # Previsão OOS: usa beta do último período in-sample
-  fcast <- sum(x_out_sc * fit$beta[nrow(fit$beta), ])
-
-  # Sanity check: fallback para ridge simples se previsão implausível
-  y_mean <- mean(y_in)
-  y_sd   <- sd(y_in)
-  if (!is.finite(fcast) || abs(fcast - y_mean) > 5 * y_sd) {
-    tryCatch({
-      cv_r    <- glmnet::cv.glmnet(X_in_sc, y_in, alpha = 0,
-                                    nfolds = kfold)
-      fcast_r <- as.numeric(predict(
-        glmnet::glmnet(X_in_sc, y_in, alpha = 0,
-                       lambda = cv_r$lambda.min),
-        newx = matrix(x_out_sc, nrow = 1)
-      ))
-      fcast <- fcast_r
-      warning("2SRR instável — usando Ridge como fallback.")
-    }, error = function(e) fcast <<- y_mean)
-  }
-
-  # Devolve betas no espaço padronizado (suficiente para análise)
-  list(
-    forecast = fcast,
-    beta     = fit$beta,        # T×K time-varying betas
-    lambda   = fit$lambda,
-    omega    = fit$omega,
-    sigma2   = fit$sigma2
-  )
-}
-
-
-# ==============================================================
-# 8. Wrapper padrão Medeiros: run2srr()
-# run2srr() — versão alinhada ao padrão Medeiros
-# Usa dataprep() diretamente.
-# ==============================================================
+# FIX-3: tryCatch externo envolve tudo
+# FIX-6: dummy é preservada explicitamente — não pode cair no
+#   filtro good_cols porque sua variância pode ser 0 (sem crise
+#   na janela). A dummy é separada de Xin antes do filtro e
+#   reincorporada depois, garantindo que Xout também bata.
 
 run2srr <- function(ind, df, variable, horizon,
                     kfold   = 5,
                     lambdas = exp(seq(-4, 20, length.out = 25))) {
 
-  # --- 1. Mesmo dataprep do Medeiros (nofact=TRUE: sem PCA, com dummy) ---
-  prep <- dataprep(ind, df, variable, horizon, nofact = TRUE)
-  Xin  <- prep$Xin    # matrix (T-h) x K  — idêntico ao Ridge
-  yin  <- prep$yin    # vector (T-h)       — idêntico ao Ridge
-  Xout <- as.numeric(prep$Xout)  # vetor K — ponto de previsão OOS
+  result <- tryCatch({
 
-  if (length(yin) < 20 || ncol(Xin) < 2)
-    return(list(forecast = NA_real_, outputs = NULL))
+    # 1. dataprep idêntico ao Medeiros (nofact=TRUE, com dummy)
+    prep <- dataprep(ind, df, variable, horizon, nofact = TRUE)
+    Xin  <- prep$Xin
+    yin  <- prep$yin
+    Xout <- as.numeric(prep$Xout)
 
-  # --- 2. Remove colunas com variância zero (robustez) ---
-  col_var   <- apply(Xin, 2, var, na.rm = TRUE)
-  good_cols <- col_var > 1e-10
-  if (sum(good_cols) < 2)
-    return(list(forecast = NA_real_, outputs = NULL))
-  Xin  <- Xin[, good_cols, drop = FALSE]
-  Xout <- Xout[good_cols]
+    if (!is.matrix(Xin)) Xin <- as.matrix(Xin)
+    if (nrow(Xin) == 0 || ncol(Xin) == 0 || length(yin) < 20)
+      return(list(forecast = NA_real_, outputs = NULL))
 
-  # --- 3. Padroniza X (para estabilidade numérica do dual ridge) ---
-  X_means <- colMeans(Xin)
-  X_sds   <- apply(Xin, 2, sd)
-  X_sds[X_sds < 1e-10] <- 1
-  Xin_sc   <- sweep(sweep(Xin, 2, X_means, "-"), 2, X_sds, "/")
-  Xout_sc  <- (Xout - X_means) / X_sds
+    # FIX-6: separa a dummy (última coluna) antes de filtrar por variância
+    # dataprep() sempre adiciona dummy como última coluna (add_dummy=TRUE)
+    n_cols     <- ncol(Xin)
+    dummy_col  <- Xin[, n_cols, drop = FALSE]   # salva dummy
+    dummy_out  <- Xout[n_cols]                   # escalar OOS da dummy
+    Xin_main   <- Xin[, -n_cols, drop = FALSE]  # remove dummy do filtro
+    Xout_main  <- Xout[-n_cols]
 
-  # --- 4. Estima 2SRR (dual ridge, dois passos) ---
-  fit <- tvp_2srr(Xin_sc, yin, kfold = kfold, lambdas = lambdas)
+    # 2. Filtra variância zero apenas nas colunas principais
+    col_var   <- apply(Xin_main, 2, var, na.rm = TRUE)
+    good_cols <- which(col_var > 1e-10)
+    if (length(good_cols) < 2)
+      return(list(forecast = NA_real_, outputs = NULL))
 
-  # --- 5. Previsão OOS com betas do último período ---
-  beta_T <- fit$beta[nrow(fit$beta), ]   # coefs finais (escala padronizada)
-  fcast  <- sum(Xout_sc * beta_T)
+    Xin_main  <- Xin_main[, good_cols, drop = FALSE]
+    Xout_main <- Xout_main[good_cols]
 
-  # Fallback Ridge simples se previsão for implausível
-  y_sd <- sd(yin)
-  y_mu <- mean(yin)
-  if (!is.finite(fcast) || abs(fcast - y_mu) > 5 * y_sd) {
-    tryCatch({
-      cv_r  <- glmnet::cv.glmnet(Xin_sc, yin, alpha = 0, nfolds = kfold)
-      fcast <- as.numeric(predict(
-        glmnet::glmnet(Xin_sc, yin, alpha = 0, lambda = cv_r$lambda.min),
-        newx = matrix(Xout_sc, nrow = 1)
-      ))
-    }, error = function(e) fcast <<- y_mu)
-  }
+    # Reincorpora dummy
+    Xin_f  <- cbind(Xin_main, dummy_col)
+    Xout_f <- c(Xout_main, dummy_out)
 
-  # --- 6. Despadroniza betas para escala original (comparável ao Ridge) ---
-  # beta_orig[k] = beta_sc[k] / sd(Xin[,k])
-  # (intercepto implícito absorvido na média)
-  beta_orig <- sweep(fit$beta, 2, X_sds[good_cols], "/")
+    # 3. Padroniza X (exceto dummy — já está em 0/1)
+    n_main  <- length(good_cols)
+    X_means <- colMeans(Xin_f[, seq_len(n_main), drop = FALSE])
+    X_sds   <- apply(Xin_f[, seq_len(n_main), drop = FALSE], 2, sd)
+    X_sds[X_sds < 1e-10] <- 1
 
-  # --- 7. Outputs no mesmo formato que os outros modelos do Medeiros ---
-  outputs <- list(
-    betas_time_varying = beta_orig,   # T×K — betas no tempo (escala original)
-    lambda             = fit$lambda,
-    omega              = fit$omega,   # variâncias dos parâmetros (2SRR step 2)
-    sigma2             = fit$sigma2,  # variâncias dos resíduos (GARCH step 2)
-    n_obs              = nrow(Xin),
-    n_vars             = ncol(Xin)
-  )
+    Xin_sc  <- Xin_f
+    Xout_sc <- Xout_f
+    Xin_sc[, seq_len(n_main)]  <- sweep(
+      sweep(Xin_f[, seq_len(n_main), drop = FALSE], 2, X_means, "-"),
+      2, X_sds, "/"
+    )
+    Xout_sc[seq_len(n_main)] <- (Xout_f[seq_len(n_main)] - X_means) / X_sds
 
-  list(forecast = fcast, outputs = outputs)
+    # 4. Estima 2SRR
+    fit <- tvp_2srr(Xin_sc, yin, kfold = kfold, lambdas = lambdas)
+
+    # 5. Previsão OOS com betas do último período
+    beta_T <- fit$beta[nrow(fit$beta), ]
+    fcast  <- sum(Xout_sc * beta_T)
+
+    # Fallback Ridge se previsão implausível
+    y_mu <- mean(yin)
+    y_sd <- sd(yin)
+    if (!is.finite(fcast) || abs(fcast - y_mu) > 5 * y_sd) {
+      fcast <- tryCatch({
+        cv_r <- glmnet::cv.glmnet(Xin_sc, yin, alpha = 0, nfolds = kfold)
+        as.numeric(predict(
+          glmnet::glmnet(Xin_sc, yin, alpha = 0, lambda = cv_r$lambda.min),
+          newx = matrix(Xout_sc, nrow = 1)
+        ))
+      }, error = function(e) y_mu)
+    }
+
+    # 6. Despadroniza betas para escala original
+    # (apenas colunas principais; dummy permanece em escala 0/1)
+    beta_orig <- fit$beta
+    beta_orig[, seq_len(n_main)] <- sweep(
+      fit$beta[, seq_len(n_main), drop = FALSE],
+      2, X_sds, "/"
+    )
+
+    outputs <- list(
+      betas_time_varying = beta_orig,
+      lambda             = fit$lambda,
+      omega              = fit$omega,
+      sigma2             = fit$sigma2,
+      n_obs              = nrow(Xin_f),
+      n_vars             = ncol(Xin_f)
+    )
+
+    list(forecast = fcast, outputs = outputs)
+
+  }, error = function(e) {
+    message(sprintf("  [run2srr h=%d] ERRO: %s", horizon, conditionMessage(e)))
+    list(forecast = NA_real_, outputs = NULL)
+  })
+
+  result
 }
 
+
 # ==============================================================
-# 9. Utilitários de análise dos betas no tempo
+# 10. extract_betas_over_time — consolida betas de todas as janelas
 # ==============================================================
 
-#' Consolida betas de todas as janelas em data.frame para análise
-#' @param model_list resultado de rolling_window(run2srr, ...)
-#' @param df         data matrix original (com rownames = datas)
-#' @param nwindows   número de janelas OOS
 extract_betas_over_time <- function(model_list, df, nwindows) {
   n_windows  <- length(model_list$outputs)
   dates_all  <- as.Date(rownames(df))
@@ -471,7 +408,7 @@ extract_betas_over_time <- function(model_list, df, nwindows) {
   for (i in seq_len(n_windows)) {
     out <- model_list$outputs[[i]]
     if (is.null(out) || is.null(out$betas_time_varying)) next
-    b   <- out$betas_time_varying
+    b      <- out$betas_time_varying
     last_b <- if (is.matrix(b)) as.numeric(b[nrow(b), ]) else as.numeric(b)
     betas_list[[i]] <- data.frame(
       window_date = win_dates[i],
@@ -483,43 +420,55 @@ extract_betas_over_time <- function(model_list, df, nwindows) {
 }
 
 
-#' Plot dos top-N betas com maior variância no tempo
-#' @param df_betas  data.frame de extract_betas_over_time()
-#' @param var_names vetor de nomes das variáveis (opcional)
-#' @param top_n     quantas variáveis plotar
-#' @param save_path caminho para salvar PNG (opcional)
+# ==============================================================
+# 11. plot_betas_over_time — top-N betas com maior variância
+# ==============================================================
+# FIX-7: "\u03b2" com UMA barra — R interpreta \u em tempo de parse.
+#   Com DUAS barras (\\u03b2) o R trata como string literal e imprime
+#   o texto "\u03b2" no eixo em vez do caractere β.
+
 plot_betas_over_time <- function(df_betas, var_names = NULL,
                                   top_n = 10, variable = "CPIAUCSL",
                                   save_path = NULL) {
   if (!requireNamespace("ggplot2", quietly = TRUE))
-    stop("Instale ggplot2")
+    stop("Instale ggplot2: install.packages('ggplot2')")
 
-  beta_var  <- tapply(df_betas$beta, df_betas$var_idx, var, na.rm = TRUE)
-  top_vars  <- order(beta_var, decreasing = TRUE)[seq_len(min(top_n,
-                                                               length(beta_var)))]
+  beta_var <- tapply(df_betas$beta, df_betas$var_idx, var, na.rm = TRUE)
+  top_vars <- order(beta_var, decreasing = TRUE)[seq_len(min(top_n,
+                                                              length(beta_var)))]
   df_p <- df_betas[df_betas$var_idx %in% top_vars, ]
+
   df_p$var_label <- if (!is.null(var_names) &&
                          max(df_p$var_idx) <= length(var_names)) {
     var_names[df_p$var_idx]
-  } else paste0("X", df_p$var_idx)
+  } else {
+    paste0("X", df_p$var_idx)
+  }
 
-  p <- ggplot2::ggplot(df_p,
-         ggplot2::aes(x = window_date, y = beta,
-                      colour = var_label, group = var_label)) +
+  p <- ggplot2::ggplot(
+    df_p,
+    ggplot2::aes(x = window_date, y = beta,
+                 colour = var_label, group = var_label)
+  ) +
     ggplot2::geom_line(linewidth = 0.7, alpha = 0.85) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
                         colour = "grey60", linewidth = 0.4) +
     ggplot2::scale_x_date(date_labels = "%Y", date_breaks = "2 years") +
     ggplot2::labs(
-      title    = sprintf("Betas Time-Varying — 2SRR | %s", variable),
-      subtitle = sprintf("Top %d variáveis por variância dos betas", top_n),
-      x = NULL, y = "Coeficiente β(t)", colour = "Variável"
+      title    = sprintf("Betas Time-Varying \u2014 2SRR | %s", variable),
+      subtitle = sprintf("Top %d vari\u00e1veis por vari\u00e2ncia dos betas", top_n),
+      x        = NULL,
+      y        = "Coeficiente \u03b2(t)",   # FIX-7: 1 barra
+      colour   = "Vari\u00e1vel"
     ) +
     ggplot2::theme_minimal(base_size = 11) +
-    ggplot2::theme(legend.position = "right",
-                   panel.grid.minor = ggplot2::element_blank())
+    ggplot2::theme(
+      legend.position  = "right",
+      panel.grid.minor = ggplot2::element_blank()
+    )
 
   if (!is.null(save_path))
     ggplot2::ggsave(save_path, p, width = 11, height = 5, dpi = 150)
+
   p
 }
