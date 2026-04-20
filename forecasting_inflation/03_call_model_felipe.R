@@ -16,7 +16,7 @@
 #   01 → 02 → 03 (outros modelos) → 03_call_model_felipe.R → 04_eval_results.R
 # ============================================================
 
-pkgs <- c("here", "glmnet", "tidyverse", "rugarch")
+pkgs <- c("here", "glmnet", "tidyverse", "ks", "expm", "DistributionUtils", "rugarch")
 new  <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
 if (length(new)) install.packages(new)
 
@@ -91,6 +91,9 @@ for (i in 1:12) {
   model_list[[i]] <- rolling_window(
     run2srr, data, nwindows + i - 1, i, "CPIAUCSL"
   )
+
+  cat(sprintf("[%s] Janela %d/%d | H=%d\n",
+    format(Sys.time(), "%H:%M:%S"), i, nwindow, horizon))
 
   cat(sprintf("  h = %d concluído em %.1f min\n",
               i, (proc.time() - t0)[3] / 60))

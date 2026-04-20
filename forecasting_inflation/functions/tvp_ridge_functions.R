@@ -4,20 +4,9 @@
 # Implementação do 2SRR (Coulombe 2024) em R.
 # Baseado em: "Time-Varying Parameters as Ridge Regressions"
 #   International Journal of Forecasting, 2025.
-#
-# CHANGELOG v3 (final):
-#   FIX-1: seq_len(K) em todos os loops (1:0 é perigoso)
-#   FIX-2: estimate_sigma2 robusto sem rugarch
-#   FIX-3: tryCatch externo em run2srr()
-#   FIX-4: cv_ridge_dual() usa folds TEMPORAIS (sem embaralhar)
-#   FIX-5: make_ZZt() usa C0 * xk sem outer() (memória eficiente)
-#   FIX-6: dummy preservada em run2srr() — não removida pelo good_cols
-#   FIX-7: plot_betas_over_time() usa "\u03b2" correto (1 barra)
-#
-# Dependências: glmnet (obrigatório); rugarch (opcional)
-# ==============================================================
-
-
+# Autor: Felipe Dornelles
+# Data: 2024-06-20
+# Dependências: glmnet, rugarch
 # ==============================================================
 # 1. make_ZZt — ZZ' e Z'y sem montar Z explicitamente
 # ==============================================================
