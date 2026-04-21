@@ -1,0 +1,13 @@
+=== RESUMO DOS RESULTADOS — 2SRR ===
+
+Horizontes em que 2SRR < RW     : 12/12
+Horizontes em que 2SRR < Ridge  : 11/12
+Melhor horizonte do 2SRR        : h=6 (RMSFE=0.8042)
+RMSFE acc3  : 2SRR=0.6689 | Ridge=0.7344 | LASSO=0.6865
+RMSFE acc6  : 2SRR=0.5349 | Ridge=0.5114 | LASSO=0.4775
+RMSFE acc12 : 2SRR=0.3327 | Ridge=0.2556 | LASSO=0.2335
+
+CONCLUSÃO: 2SRR é o modelo mais consistente nos horizontes
+médios e longos. Nos acumulados, domina no acc3 mas perde
+para Ridge/LASSO no acc12 — esperado pela maior rigidez
+do shrinkage fixo em horizontes muito longos.
