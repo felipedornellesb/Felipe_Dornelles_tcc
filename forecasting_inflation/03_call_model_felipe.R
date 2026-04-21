@@ -20,8 +20,10 @@ pkgs <- c("here", "glmnet", "tidyverse", "ks", "expm", "DistributionUtils", "rug
 new  <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
 if (length(new)) install.packages(new)
 
-library(here)
-setwd(here("forecasting_inflation"))
+#library(here)
+#setwd(here("forecasting_inflation"))
+
+setwd("~/tcc/Felipe_Dornelles_tcc/forecasting_inflation")
 
 library(rugarch)
 library(glmnet)
@@ -157,3 +159,4 @@ legend("topright",
        col    = c("black", "blue"),
        lty    = 1, lwd = c(1, 1.5),
        bty    = "n")
+

@@ -131,15 +131,15 @@ tvp_2srr_fit <- function(X, y, lam) {
 # ==============================================================
 
 # Original do Coulombe:
-#run2srr <- function(ind, df, variable, horizon,
-#                    K_pca_max = 40L,    # mais fatores PCA
-#                    var_expl  = 0.90,   # 90% variância explicada
-#                    kfold     = 5) {    # 5-fold CV (padrão do paper)
-
 run2srr <- function(ind, df, variable, horizon,
-                    K_pca_max = 20L,
-                    var_expl  = 0.85,
-                    kfold     = 3) {
+                    K_pca_max = 40L,    # mais fatores PCA
+                    var_expl  = 0.90,   # 90% variância explicada
+                    kfold     = 5) {    # 5-fold CV (padrão do paper)
+
+#run2srr <- function(ind, df, variable, horizon,
+#                    K_pca_max = 20L,
+#                    var_expl  = 0.85,
+#                    kfold     = 3) {
 
   result <- tryCatch({
 
