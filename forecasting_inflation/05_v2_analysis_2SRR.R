@@ -1,15 +1,14 @@
 # ============================================================
-# 05_analysis_2SRR.R  — VERSÃO FINAL
+# 05_v2_analysis_2SRR.R
 #
 # Análise completa: RMSFE, inferência DM, sub-períodos,
 # betas TVP, CSFE, heatmap, ranking de Borda, tabelas LaTeX
-#
-# ATENÇÃO: todos os gráficos têm print() antes do ggsave()
-#          Não cria pastas (já existem na máquina)
 # ============================================================
 
-library(here)
-setwd(here("forecasting_inflation"))
+#library(here)
+#setwd(here("forecasting_inflation"))
+
+setwd("~/tcc/Felipe_Dornelles_tcc/forecasting_inflation")
 
 library(tidyverse)
 library(forecast)    # dm.test()
@@ -96,9 +95,7 @@ cat("CSV salvo em results/rmsfe_comparativo.csv\n")
 #    — imprime na tela antes de qualquer gráfico
 # ============================================================
 
-cat("\n======================================================\n")
 cat("DIAGNÓSTICO DOS RESULTADOS — 2SRR\n")
-cat("======================================================\n")
 
 n_beat_rw    <- sum(res_h[, "2SRR"] < 1.0, na.rm = TRUE)
 n_beat_ridge <- sum(res_h[, "2SRR"] < res_h[, "Ridge"], na.rm = TRUE)
@@ -110,12 +107,13 @@ cat(sprintf("2SRR < Ridge em %d/12 horizontes\n", n_beat_ridge))
 cat(sprintf("2SRR < LASSO em %d/12 horizontes\n", n_beat_lasso))
 cat(sprintf("Melhor horizonte: h=%d (RMSFE = %.4f)\n", best_h, res_h[best_h, "2SRR"]))
 
-# ATENÇÃO: acc6 > 1 é o ponto mais delicado — informa o usuário
+# ATENÇÃO: acc6 > 1 é o ponto mais delicado
 if (res_full["acc6", "2SRR"] > 1.0) {
   cat(sprintf("\n[!] ATENÇÃO: acc6 do 2SRR = %.4f > 1.0 (perde para RW)\n",
               res_full["acc6", "2SRR"]))
   cat("    Causa provável: propagação de erros no acumulado\n")
   cat("    de médio prazo. Discutir no texto do TCC.\n\n")
+  cat("    tratar com o Hudson.\n\n")
 }
 
 for (acc in c("acc3", "acc6", "acc12")) {
@@ -557,30 +555,53 @@ cat("\n=== DECOMPOSIÇÃO DO GANHO POR PERÍODO (h=1) ===\n")
 print(ganho_decomp)
 write.csv(ganho_decomp, "results/decomposicao_ganho.csv", row.names = FALSE)
 
+# Detecta o range real dos dados para o eixo Y
+y_min <- min(ganho_decomp %>% filter(periodo != "Full") %>% pull(rmsfe_rel), na.rm = TRUE)
+y_max <- max(ganho_decomp %>% filter(periodo != "Full") %>% pull(rmsfe_rel), na.rm = TRUE)
+
 p_decomp <- ganho_decomp %>%
-  filter(periodo != "Full") %>%
-  mutate(periodo = factor(periodo,
-                           levels = c("Pre_COVID", "GFC", "COVID", "Post_COVID"),
-                           labels = c("Pré-COVID", "GFC (2008)", "COVID (2020-22)", "Pós-COVID"))) %>%
-  ggplot(aes(x = periodo, y = rmsfe_rel, fill = rmsfe_rel < 1)) +
+  filter(periodo != "Full", !is.na(rmsfe_rel)) %>%
+  mutate(
+    periodo   = factor(periodo,
+                       levels = c("Pre_COVID", "GFC", "COVID", "Post_COVID"),
+                       labels = c("Pré-COVID", "GFC (2008)", "COVID (2020-22)", "Pós-COVID")),
+    desvio    = rmsfe_rel - 1,          # desvio em torno do RW
+    melhor    = rmsfe_rel < 1
+  ) %>%
+  ggplot(aes(x = periodo, y = desvio, fill = melhor)) +
   geom_col(width = 0.6) +
-  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey30") +
-  geom_text(aes(label = sprintf("%.3f", rmsfe_rel)),
-            vjust = -0.4, size = 3.5, fontface = "bold") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey30") +
+  geom_text(aes(label = sprintf("%.3f", rmsfe_rel),
+                vjust = ifelse(desvio >= 0, -0.5, 1.5)),
+            size = 3.5, fontface = "bold") +
   scale_fill_manual(values = c("TRUE" = "#01696f", "FALSE" = "#a12c7b"),
                     labels = c("TRUE" = "< RW (melhor)", "FALSE" = "> RW (pior)"),
                     name   = "") +
-  scale_y_continuous(limits = c(0.7, 1.15)) +
+  scale_y_continuous(
+    labels = function(x) sprintf("%.2f", x + 1),   # mostra rmsfe_rel real no eixo
+    limits = c(-0.12, 0.22),
+    breaks = seq(-0.12, 0.20, 0.04)
+  ) +
   labs(
     title    = "RMSFE do 2SRR por período (h=1, relativo ao RW)",
     subtitle = "Verde = 2SRR bate o RW | Roxo = 2SRR perde para o RW",
     x        = "Sub-período",
-    y        = "RMSFE / RMSFE(RW)"
+    y        = "Desvio em relação ao RW (RMSFE/RMSFE(RW) − 1)",
+    caption  = paste(
+      "¹ GFC (2008): quebra estrutural abrupta reduz a capacidade adaptativa do 2SRR. Em movimentos abruptos, o Random Walk se beneficia da",
+      "ausência de relações históricas, e como o TVP precisa de observações para re-estimar os coeficientes, gera desvantagem no início do choque.",
+      sep = "\n"
+    )
   ) +
   theme_minimal(base_size = 11) +
-  theme(panel.grid.minor = element_blank(),
-        panel.grid.major.x = element_blank(),
-        plot.title = element_text(face = "bold"))
+  theme(
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title         = element_text(face = "bold"),
+    plot.caption       = element_text(colour = "grey45", size = 8,
+                                      hjust = 0,          # alinha à esquerda
+                                      margin = margin(t = 10))
+  )
 
 print(p_decomp)
 ggsave("results/fig_decomposicao_periodos.png", p_decomp, width = 9, height = 5, dpi = 150)
@@ -607,12 +628,13 @@ volatility_by_pc <- df_betas %>%
 
 write.csv(volatility_by_pc, "results/beta_volatility_by_pc.csv", row.names = FALSE)
 
+print(n = 41, volatility_by_pc)
+
 cat("\n=== Volatilidade dos betas por PC (h=1) ===\n")
 cat("NOTA: Os PCs mais voláteis são os de índice mais ALTO,\n")
 cat("o que pode indicar instabilidade numérica nos componentes\n")
 cat("menores (menos variância explicada). Verifique se PC7/PC8\n")
 cat("têm interpretação econômica ou são ruído.\n\n")
-print(head(volatility_by_pc, 10))
 
 top2_pcs <- volatility_by_pc$var_idx[1:2]   # PC7 e PC8 nos seus dados
 top6_pcs <- volatility_by_pc$var_idx[1:6]
@@ -724,6 +746,133 @@ cor_pc1_infl <- cor(diff(beta_pc1[1:n_min]),
 cat(sprintf("\nCorrelação Δβ(PC1) × Δinflação realizada: %.4f\n", cor_pc1_infl))
 
 # ============================================================
+# INTERPRETAÇÃO DOS BETAS TIME-VARYING
+# ============================================================
+# oss betas aqui são coeficientes sobre componentes PCA
+# padronizados. A magnitude absoluta não tem interpretação
+# direta em unidades de inflação. O que importa é:
+#   (1) a VARIAÇÃO ao longo do tempo
+#   (2) o SINAL em cada período
+#   (3) a ESTABILIDADE por componente (sd_beta)
+# ============================================================
+
+# --- Contribuição relativa de cada PC na previsão final -----
+# Para cada janela, qual PC contribuiu mais?
+# Contribuição = |beta(t)| / sum(|beta(t)|) * 100
+
+df_contrib <- df_betas %>%
+  group_by(window_date) %>%
+  mutate(
+    contrib_pct = abs(beta) / sum(abs(beta), na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+
+# Contribuição média de cada PC ao longo de todo o OOS
+contrib_media <- df_contrib %>%
+  group_by(var_idx, fator) %>%
+  summarise(contrib_media_pct = mean(contrib_pct, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(desc(contrib_media_pct))
+
+write.csv(contrib_media, "results/contrib_media_pcs.csv", row.names = FALSE)
+
+cat("\n=== CONTRIBUIÇÃO MÉDIA DOS 10 PCs MAIS RELEVANTES ===\n")
+print(contrib_media)
+
+# --- Gráfico: contribuição acumulada dos top 10 PCs ----------
+top10_contrib <- head(contrib_media$var_idx, 10)
+
+p_contrib <- df_contrib %>%
+  filter(var_idx %in% top10_contrib) %>%
+  mutate(fator = factor(fator, levels = paste0("PC", top10_contrib))) %>%
+  ggplot(aes(x = window_date, y = contrib_pct,
+             fill = fator, colour = fator)) +
+  geom_area(alpha = 0.7, position = "stack") +
+  geom_rect(data = recession_bands,
+            aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "white", alpha = 0.15) +
+  scale_fill_brewer(palette = "Paired") +
+  scale_colour_brewer(palette = "Paired") +
+  labs(
+    title    = "Contribuição relativa dos PCs para a previsão 2SRR ao longo do tempo (h=1)",
+    subtitle = "Cada área = participação % de um componente PCA no total dos betas\nÁrea branca = recessões NBER",
+    x        = "Data",
+    y        = "Contribuição relativa (%)",
+    fill     = "Componente",
+    colour   = "Componente",
+    caption  = "Contribuição = |β(t)| / Σ|β(t)| × 100. Betas sobre fatores PCA padronizados."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title       = element_text(face = "bold"),
+    plot.caption     = element_text(colour = "grey45", size = 8, hjust = 0)
+  )
+
+print(p_contrib)
+
+ggsave("results/fig_contrib_pcs.png", p_contrib, width = 12, height = 5, dpi = 150)
+cat("Salvo: fig_contrib_pcs.png\n")
+
+# --- Sinal dos betas de PC1, PC2, PC3 por período -----------
+# Sinal positivo = fator "puxa" a inflação para cima
+# Sinal negativo = fator "puxa" a inflação para baixo
+
+df_sinal <- df_betas %>%
+  filter(var_idx %in% 1:3) %>%
+  mutate(
+    sinal = ifelse(beta > 0, "Positivo (+)", "Negativo (−)"),
+    fator = factor(fator, levels = c("PC1", "PC2", "PC3"))
+  )
+
+p_sinal <- ggplot(df_sinal, aes(x = window_date, y = beta, colour = fator)) +
+  geom_rect(data = recession_bands,
+            aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "grey85", alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.5) +
+  geom_line(linewidth = 0.9) +
+  geom_ribbon(aes(ymin = 0, ymax = beta, fill = fator), alpha = 0.12) +
+  scale_colour_manual(values = c("PC1" = "#01696f",
+                                 "PC2" = "#964219",
+                                 "PC3" = "#4361ee")) +
+  scale_fill_manual(values  = c("PC1" = "#01696f",
+                                "PC2" = "#964219",
+                                "PC3" = "#4361ee"),
+                    guide = "none") +
+  facet_wrap(~ fator, ncol = 1, scales = "free_y") +
+  labs(
+    title    = "Sinal e magnitude dos betas TVP — PC1, PC2 e PC3 (h=1)",
+    subtitle = "Acima de 0 = fator contribui positivamente para a previsão de inflação\nAbaixo de 0 = fator contribui negativamente | Área cinza = recessões NBER",
+    x        = "Data",
+    y        = "β(t)",
+    colour   = "Componente",
+    caption  = paste(
+      "PC1–PC3 capturam os três maiores eixos de variação dos preditores do FRED-MD.",
+      "Mudanças de sinal ao longo do tempo evidenciam instabilidade na relação entre",
+      "variáveis macro e inflação — justificativa central para o uso de modelos TVP.",
+      sep = "\n"
+    )
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text       = element_text(face = "bold", colour = "#01696f"),
+    plot.title       = element_text(face = "bold"),
+    plot.subtitle    = element_text(colour = "grey40", size = 9),
+    plot.caption     = element_text(colour = "grey45", size = 8, hjust = 0,
+                                    margin = margin(t = 8)),
+    legend.position  = "none"
+  )
+
+print(df_sinal)
+
+print(p_sinal)
+
+ggsave("results/fig_sinal_betas_pc123.png", p_sinal,
+       width = 11, height = 8, dpi = 150)
+cat("Salvo: fig_sinal_betas_pc123.png\n")
+
+# ============================================================
 # 12. CSFE — CUMULATIVE SQUARED FORECAST ERROR (h=1)
 #     Referência: Goyal & Welch (2008, RFS); Clark & West (2007)
 # ============================================================
@@ -787,7 +936,7 @@ p_infl <- ggplot(df_infl, aes(x = date))
 
 p_infl <- add_recession_bands(p_infl) +
   geom_line(aes(y = infl, colour = "Realizado"), linewidth = 0.8) +
-  geom_line(aes(y = fc_2srr_h1, colour = "2SRR h=1"), linewidth = 0.7, linetype = "dashed") +
+  geom_line(aes(y = fc_2srr_h1, colour = "2SRR h=1"), linewidth = 0.8) +
   scale_colour_manual(values = c("Realizado" = "black", "2SRR h=1" = "#01696f")) +
   labs(
     title    = "Inflação realizada (CPIAUCSL) e previsão 2SRR h=1 — período OOS",
@@ -845,34 +994,4 @@ if (res_full["acc6", "2SRR"] > 1.0) {
 sink()
 
 # ============================================================
-# SUMÁRIO FINAL
-# ============================================================
-
-cat("\n========================================================\n")
 cat(" 05_analysis_2SRR.R — CONCLUÍDO\n")
-cat("========================================================\n")
-cat("Arquivos em results/:\n")
-cat("  rmsfe_comparativo.csv\n")
-cat("  tabela_rmsfe_dm_latex.tex\n")
-cat("  dm_pvalues.csv\n")
-cat("  rmsfe_subperiodos.csv\n")
-cat("  decomposicao_ganho.csv\n")
-cat("  beta_volatility_by_pc.csv\n")
-cat("  ranking_borda.csv\n")
-cat("  resumo_2SRR.txt\n")
-cat("  posicionamento_coulombe.txt\n")
-cat("  fig1_rmsfe_todos.png\n")
-cat("  fig2_2srr_vs_selecionados.png\n")
-cat("  fig_heatmap_rmsfe.png\n")
-cat("  fig_borda_ranking.png\n")
-cat("  fig_dm_heatmap.png\n")
-cat("  fig_subperiodos.png\n")
-cat("  fig_subperiodo_gfc.png\n")
-cat("  fig_decomposicao_periodos.png\n")
-cat("  fig_betas_top2_volateis.png\n")
-cat("  fig_betas_pc1_pc2_pc3.png\n")
-cat("  fig_betas_top6_pcs.png\n")
-cat("  fig_norma_betas.png\n")
-cat("  fig_csfe.png\n")
-cat("  fig_inflacao_realizada_vs_2srr.png\n")
-cat("========================================================\n")

@@ -1,8 +1,0 @@
-"Modelo","Framework","Contribuicao"
-"AR (Medeiros)","ForecastingInflation (FRED-MD)","Baseline Medeiros et al."
-"Ridge (Medeiros)","ForecastingInflation (FRED-MD)","Baseline Medeiros et al."
-"LASSO (Medeiros)","ForecastingInflation (FRED-MD)","Baseline Medeiros et al."
-"RF (Medeiros)","ForecastingInflation (FRED-MD)","Baseline Medeiros et al."
-"Bagging (Medeiros)","ForecastingInflation (FRED-MD)","Baseline Medeiros et al."
-"Factor (Medeiros)","ForecastingInflation (FRED-MD)","Baseline Medeiros et al."
-"2SRR [ESTE TRABALHO]","ForecastingInflation (FRED-MD) + Coulombe (2024)","Primeira aplicacao 2SRR no framework Medeiros"

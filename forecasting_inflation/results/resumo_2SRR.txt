@@ -1,0 +1,12 @@
+=== RESUMO DOS RESULTADOS — 2SRR ===
+
+Horizontes em que 2SRR < RW    : 12/12
+Horizontes em que 2SRR < Ridge : 7/12
+Horizontes em que 2SRR < LASSO : 0/12
+Melhor horizonte               : h=12 (RMSFE = 0.7619)
+RMSFE acc3  : 2SRR=0.9205 | Ridge=0.8879 | LASSO=0.8331
+RMSFE acc6  : 2SRR=1.0581 | Ridge=1.0263 | LASSO=1.0204
+RMSFE acc12 : 2SRR=0.8013 | Ridge=0.8053 | LASSO=0.7998
+
+[!] acc6 > 1: 2SRR perde para RW no acumulado de 6 meses.
+    Discutir no texto: propagação de erro em horizontes intermediários.

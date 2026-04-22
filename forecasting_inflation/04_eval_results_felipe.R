@@ -1,6 +1,3 @@
-library(here)
-setwd(here("forecasting_inflation"))
-
 # ============================================================
 # 04_eval_results_felipe.R
 #
@@ -19,13 +16,12 @@ setwd(here("forecasting_inflation"))
 #   - forecasts dos outros modelos (03_call_model.R)
 # ============================================================
 
+#library(here)
+#setwd(here("forecasting_inflation"))
+
+setwd("~/tcc/Felipe_Dornelles_tcc/forecasting_inflation")
+
 library(tidyverse)
-library(here)
-
-setwd(here("forecasting_inflation"))
-
-# Cria pasta results/ se ainda não existir
-if (!dir.exists("results")) dir.create("results")
 
 source("functions/functions.R")
 source("functions/felipe_functions.R")
@@ -86,7 +82,6 @@ colnames(errorsacc) <- names(models_list)
 
 res_acc <- errorsacc / rweacc
 rownames(res_acc) <- c("acc3", "acc6", "acc12")
-
 
 # ============================================================
 # 5. Tabela final
@@ -225,3 +220,4 @@ if (all(c("2SRR", "Ridge") %in% names(models_list))) {
          p_compare, width = 9, height = 5, dpi = 150)
   cat("Gráfico 2SRR vs Ridge salvo em results/fig_2srr_vs_ridge.png\n")
 }
+

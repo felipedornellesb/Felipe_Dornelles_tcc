@@ -45,7 +45,7 @@ source("functions/rolling_window.R")
 model_name <- "2SRR"
 # Medeiros: 180 windows
 # Felipe/Hudson: 312 windows
-nwindows <- 180   # alterar para 180 ou 312 conforme desejado
+nwindows <- 312   # alterar para 180 ou 312 conforme desejado
 
 # ============================================================
 # Carrega data.rda

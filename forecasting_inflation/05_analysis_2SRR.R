@@ -365,6 +365,9 @@ p_sub <- rmsfe_sub %>%
 
 ggsave("results/fig_subperiodos.png",
        p_sub, width = 13, height = 5, dpi = 150)
+
+print(p_sub)
+
 cat("Gráfico sub-períodos salvo em results/fig_subperiodos.png\n")
 
 # Gráfico GFC separado
@@ -404,6 +407,8 @@ p_gfc <- rmsfe_sub %>%
 
 ggsave("results/fig_subperiodo_gfc.png",
        p_gfc, width = 10, height = 5, dpi = 150)
+
+print(p_gfc)
 
 # ============================================================
 # C. ANÁLISE DOS BETAS TVP — PC1 vs PC2 vs demais
@@ -482,6 +487,9 @@ p_betas_pc12 <- df_betas %>%
 
 ggsave("results/fig_betas_pc1_pc2.png",
        p_betas_pc12, width = 11, height = 5, dpi = 150)
+
+print(p_betas_pc12)
+
 cat("Gráfico betas PC1/PC2 salvo em results/fig_betas_pc1_pc2.png\n")
 
 # --- C3. Gráfico: Top 6 PCs por volatilidade (facet)
@@ -514,6 +522,9 @@ p_betas_top6 <- df_betas %>%
 
 ggsave("results/fig_betas_top6_pcs.png",
        p_betas_top6, width = 12, height = 7, dpi = 150)
+
+print(p_betas_top6)
+
 cat("Gráfico Top 6 PCs salvo em results/fig_betas_top6_pcs.png\n")
 
 # --- C4. Interpretação econômica: beta de PC1 x inflação realizada
@@ -612,6 +623,9 @@ p_csfe <- df_csfe %>%
 
 ggsave("results/fig_csfe.png",
        p_csfe, width = 11, height = 5, dpi = 150)
+
+print(p_csfe)
+
 cat("Gráfico CSFE salvo em results/fig_csfe.png\n")
 
 # ============================================================
@@ -743,3 +757,4 @@ cat("  fig_betas_pc1_pc2.png          — betas PC1 e PC2 + recessões\n")
 cat("  fig_betas_top6_pcs.png         — top 6 PCs (facet)\n")
 cat("  fig_csfe.png                   — CSFE acumulado vs RW e Ridge\n")
 cat("========================================================\n")
+
