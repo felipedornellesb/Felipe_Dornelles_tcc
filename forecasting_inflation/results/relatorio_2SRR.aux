@@ -1,0 +1,59 @@
+\relax 
+\providecommand \babel@aux [2]{\global \let \babel@toc \@gobbletwo }
+\@nameuse{bbl@beforestart}
+\catcode `"\active 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\providecommand \oddpage@label [2]{}
+\babel@aux{brazil}{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}O que foi feito e por quê}{2}{section.1}\protected@file@percent }
+\newlabel{sec:contexto}{{1}{2}{O que foi feito e por quê}{section.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Como o 2SRR funciona, na prática}{2}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Hiperparâmetros escolhidos e justificativa}{2}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Resultados de previsão}{3}{section.2}\protected@file@percent }
+\newlabel{sec:resultados}{{2}{3}{Resultados de previsão}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}RMSFE relativo ao Random Walk --- todos os modelos}{3}{subsection.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces RMSFE relativo ao Random Walk para todos os 13 modelos ($h = 1$ a $h = 12$). A linha tracejada em 1{,}0 representa o benchmark. O 2SRR é o único modelo que fica abaixo de 1{,}0 em \textbf  {todos} os 12 horizontes individuais. O Bagging é o que mais destoa negativamente, superando o benchmark em múltiplos horizontes.}}{3}{figure.caption.2}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:rmsfe_todos}{{1}{3}{RMSFE relativo ao Random Walk para todos os 13 modelos ($h = 1$ a $h = 12$). A linha tracejada em 1{,}0 representa o benchmark. O 2SRR é o único modelo que fica abaixo de 1{,}0 em \textbf {todos} os 12 horizontes individuais. O Bagging é o que mais destoa negativamente, superando o benchmark em múltiplos horizontes}{figure.caption.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces RMSFE relativo ao Random Walk com significância Diebold-Mariano. Asteriscos indicam significância do teste DM bilateral, comparando cada modelo \textbf  {contra o 2SRR}: * $p<0{,}10$; ** $p<0{,}05$; *** $p<0{,}01$. \textbf  {Negrito} = menor RMSFE por linha. Valores $< 1$ indicam ganho sobre o benchmark RW. Hiperparâmetros 2SRR: $K_{\max }=40$, variância $\geq 90\%$, $k$-fold~$=5$. 312 janelas OOS (Jan/1960--Jun/2025).}}{4}{table.caption.3}\protected@file@percent }
+\newlabel{tab:rmsfe_dm}{{1}{4}{RMSFE relativo ao Random Walk com significância Diebold-Mariano. Asteriscos indicam significância do teste DM bilateral, comparando cada modelo \textbf {contra o 2SRR}: * $p<0{,}10$; ** $p<0{,}05$; *** $p<0{,}01$. \textbf {Negrito} = menor RMSFE por linha. Valores $< 1$ indicam ganho sobre o benchmark RW. Hiperparâmetros 2SRR: $K_{\max }=40$, variância $\geq 90\%$, $k$-fold~$=5$. 312 janelas OOS (Jan/1960--Jun/2025)}{table.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Como ler o teste Diebold-Mariano nessa tabela}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}2SRR vs.\ Ridge --- o ganho da variação temporal}{5}{subsection.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces RMSFE relativo ao RW: 2SRR vs.\ Ridge por horizonte. O Ridge homogêneo é o benchmark natural para o 2SRR, pois é algebricamente equivalente ao 2SRR com $\lambda \to \infty $ (parâmetros congelados). Onde o 2SRR ganha, significa que deixar os parâmetros variar ajudou.}}{5}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:2srr_ridge}{{2}{5}{RMSFE relativo ao RW: 2SRR vs.\ Ridge por horizonte. O Ridge homogêneo é o benchmark natural para o 2SRR, pois é algebricamente equivalente ao 2SRR com $\lambda \to \infty $ (parâmetros congelados). Onde o 2SRR ganha, significa que deixar os parâmetros variar ajudou}{figure.caption.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}2SRR vs.\ modelos selecionados}{6}{subsection.2.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces RMSFE relativo ao RW: 2SRR vs.\ modelos selecionados (Ridge, ElNET, RF) por horizonte. Comparação enxuta com os três rivais mais relevantes --- o benchmark natural (Ridge), o melhor modelo estático nos horizontes curtos (ElNET) e o melhor modelo nos horizontes longos (Random Forest).}}{6}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:2srr_selecionados}{{3}{6}{RMSFE relativo ao RW: 2SRR vs.\ modelos selecionados (Ridge, ElNET, RF) por horizonte. Comparação enxuta com os três rivais mais relevantes --- o benchmark natural (Ridge), o melhor modelo estático nos horizontes curtos (ElNET) e o melhor modelo nos horizontes longos (Random Forest)}{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Análise por sub-períodos}{7}{subsection.2.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces RMSFE por sub-período histórico (Grande Inflação, Grande Moderação, Crise Financeira Global, Pós-pandemia). A decomposição temporal revela em quais regimes macroeconômicos o 2SRR se beneficia da adaptabilidade dos parâmetros.}}{7}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:subperiodos}{{4}{7}{RMSFE por sub-período histórico (Grande Inflação, Grande Moderação, Crise Financeira Global, Pós-pandemia). A decomposição temporal revela em quais regimes macroeconômicos o 2SRR se beneficia da adaptabilidade dos parâmetros}{figure.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6}Ranking Borda --- desempenho agregado}{7}{subsection.2.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Ranking Borda agregado por modelo ao longo de todos os horizontes ($h=1$ a $h=12$). Menor pontuação = melhor desempenho médio no ranking. O Borda Count é uma métrica de consenso que penaliza modelos instáveis entre horizontes.}}{7}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:borda}{{5}{7}{Ranking Borda agregado por modelo ao longo de todos os horizontes ($h=1$ a $h=12$). Menor pontuação = melhor desempenho médio no ranking. O Borda Count é uma métrica de consenso que penaliza modelos instáveis entre horizontes}{figure.caption.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.7}CSFE --- Quando o 2SRR ganha e quando perde}{8}{subsection.2.7}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces CSFE acumulado para $h=1$: diferença acumulada entre o erro quadrático do benchmark (RW) e o erro quadrático do 2SRR. Linha ascendente = 2SRR está vencendo; linha descendente = 2SRR está perdendo. As sombras cinzas indicam recessões NBER.}}{8}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:csfe}{{6}{8}{CSFE acumulado para $h=1$: diferença acumulada entre o erro quadrático do benchmark (RW) e o erro quadrático do 2SRR. Linha ascendente = 2SRR está vencendo; linha descendente = 2SRR está perdendo. As sombras cinzas indicam recessões NBER}{figure.caption.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Os parâmetros variantes no tempo}{8}{section.3}\protected@file@percent }
+\newlabel{sec:betas}{{3}{8}{Os parâmetros variantes no tempo}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Evolução temporal dos coeficientes (top variáveis)}{9}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Evolução de $\hat  {\beta }(t)$ para $h=1$, top 10 variáveis por variância dos coeficientes ao longo do período completo (1960--2025). As sombras cinzas indicam recessões NBER.}}{9}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:betas_tempo}{{7}{9}{Evolução de $\hat {\beta }(t)$ para $h=1$, top 10 variáveis por variância dos coeficientes ao longo do período completo (1960--2025). As sombras cinzas indicam recessões NBER}{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Top 2 componentes mais voláteis}{10}{subsection.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Evolução dos coeficientes TVP dos 2 componentes PCA com maior volatilidade ao longo do tempo ($h=1$). Esses são os fatores que mais ``trabalham'' na adaptação do modelo às mudanças de regime macroeconômico.}}{10}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:betas_top2}{{8}{10}{Evolução dos coeficientes TVP dos 2 componentes PCA com maior volatilidade ao longo do tempo ($h=1$). Esses são os fatores que mais ``trabalham'' na adaptação do modelo às mudanças de regime macroeconômico}{figure.caption.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Sinal e magnitude dos principais componentes PCA}{10}{subsection.3.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Evolução de $\hat  {\beta }(t)$ para PC1, PC2 e PC3 ao longo de todo o período OOS, $h=1$. PC1 e PC2 são os dois maiores eixos de variação do FRED-MD. Mudanças de sinal evidenciam instabilidade estrutural na relação macro-inflação.}}{10}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:betas_pc1_pc2}{{9}{10}{Evolução de $\hat {\beta }(t)$ para PC1, PC2 e PC3 ao longo de todo o período OOS, $h=1$. PC1 e PC2 são os dois maiores eixos de variação do FRED-MD. Mudanças de sinal evidenciam instabilidade estrutural na relação macro-inflação}{figure.caption.11}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Top 6 componentes PCA por volatilidade dos coeficientes ($h=1$). Cada painel mostra a série $\hat  {\beta }_{PC_k}(t)$ com faixa de confiança. A variância entre componentes revela quais dimensões do espaço macro são mais instáveis ao longo do tempo.}}{11}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:betas_top6}{{10}{11}{Top 6 componentes PCA por volatilidade dos coeficientes ($h=1$). Cada painel mostra a série $\hat {\beta }_{PC_k}(t)$ com faixa de confiança. A variância entre componentes revela quais dimensões do espaço macro são mais instáveis ao longo do tempo}{figure.caption.12}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Contribuição relativa de cada componente PCA}{11}{subsection.3.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Contribuição relativa (\%) dos top 10 componentes PCA para a previsão do 2SRR ao longo do tempo ($h=1$). Cada área empilhada representa a parcela $|\hat  {\beta }_k(t)| / \DOTSB \sum@ \slimits@ |\hat  {\beta }|$. Recessões NBER em cinza.}}{12}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:contrib_pcs}{{11}{12}{Contribuição relativa (\%) dos top 10 componentes PCA para a previsão do 2SRR ao longo do tempo ($h=1$). Cada área empilhada representa a parcela $|\hat {\beta }_k(t)| / \sum |\hat {\beta }|$. Recessões NBER em cinza}{figure.caption.13}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Onde o 2SRR se posiciona na literatura}{12}{section.4}\protected@file@percent }
+\newlabel{sec:literatura}{{4}{12}{Onde o 2SRR se posiciona na literatura}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}O que ainda pode ser feito (próximos passos)}{12}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Configuração técnica da estimação}{13}{section.5}\protected@file@percent }
+\newlabel{sec:tecnico}{{5}{13}{Configuração técnica da estimação}{section.5}{}}
+\gdef \@abspage@last{14}

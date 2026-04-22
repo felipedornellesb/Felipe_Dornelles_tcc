@@ -1,0 +1,20 @@
+\babel@toc {brazil}{}\relax 
+\contentsline {section}{\numberline {1}O que foi feito e por quê}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Como o 2SRR funciona, na prática}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Hiperparâmetros escolhidos e justificativa}{2}{subsection.1.2}%
+\contentsline {section}{\numberline {2}Resultados de previsão}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}RMSFE relativo ao Random Walk --- todos os modelos}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Como ler o teste Diebold-Mariano nessa tabela}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}2SRR vs.\ Ridge --- o ganho da variação temporal}{5}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}2SRR vs.\ modelos selecionados}{6}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}Análise por sub-períodos}{7}{subsection.2.5}%
+\contentsline {subsection}{\numberline {2.6}Ranking Borda --- desempenho agregado}{7}{subsection.2.6}%
+\contentsline {subsection}{\numberline {2.7}CSFE --- Quando o 2SRR ganha e quando perde}{8}{subsection.2.7}%
+\contentsline {section}{\numberline {3}Os parâmetros variantes no tempo}{8}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Evolução temporal dos coeficientes (top variáveis)}{9}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Top 2 componentes mais voláteis}{10}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Sinal e magnitude dos principais componentes PCA}{10}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Contribuição relativa de cada componente PCA}{11}{subsection.3.4}%
+\contentsline {section}{\numberline {4}Onde o 2SRR se posiciona na literatura}{12}{section.4}%
+\contentsline {subsection}{\numberline {4.1}O que ainda pode ser feito (próximos passos)}{12}{subsection.4.1}%
+\contentsline {section}{\numberline {5}Configuração técnica da estimação}{13}{section.5}%
