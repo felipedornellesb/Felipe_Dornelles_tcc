@@ -1,0 +1,11 @@
+\babel@toc {brazil}{}\relax 
+\contentsline {section}{\numberline {1}Modelo 2SRR: Parâmetros Variantes no Tempo}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Motivação}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Especificação}{3}{subsection.1.2}%
+\contentsline {paragraph}{Estágio 1 — Redução de dimensionalidade via PCA.}{3}{section*.2}%
+\contentsline {paragraph}{Estágio 2 — Ridge com parâmetros variantes no tempo.}{3}{section*.3}%
+\contentsline {subsection}{\numberline {1.3}Implementação}{4}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Resultados}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}RMSFE relativo ao Random Walk}{4}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Comparação 2SRR vs Ridge}{6}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Parâmetros Variantes no Tempo}{8}{subsection.2.3}%

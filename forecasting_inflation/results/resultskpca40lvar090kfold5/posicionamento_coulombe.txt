@@ -1,0 +1,19 @@
+=== POSICIONAMENTO DO TCC NA LITERATURA ===
+
+Coulombe (2024) avalia 2SRR em:
+  - Modelos AR, ARDI, VAR5, VAR20 em dados CANADENSES
+  - Variáveis: Inflação, GDP growth, Interest rate (SPREAD)
+  - Tabela 16 (Half/Half): RMSPE relativo ao AR2
+
+Este trabalho:
+  - Aplica 2SRR no MESMO FRAMEWORK de Medeiros et al.
+  - Dados FRED-MD (EUA) — inflação CPI
+  - RMSFE relativo ao Random Walk (benchmark mais conservador)
+  - Permite comparação DIRETA com Ridge, LASSO, RF, Bagging
+    no MESMO dataset — algo não feito por Coulombe (2024)
+
+Contribuição inédita:
+  Primeira avaliação de 2SRR head-to-head com métodos
+  de Machine Learning (RF, Bagging) E métodos clássicos
+  (Ridge, LASSO) no framework FRED-MD de Medeiros et al.
+  Coulombe (2024) compara apenas com VARs e ARs.

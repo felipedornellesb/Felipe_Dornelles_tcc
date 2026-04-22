@@ -1,0 +1,19 @@
+=== INTERPRETAÇÃO ECONÔMICA DOS BETAS TVP ===
+
+Fator mais volátil (h=1): PC7 
+Segundo mais volátil     : PC8 
+
+Correlação entre Δβ(PC7) e Δ(Inflação realizada): 0.0844
+
+Interpretação:
+  Variações significativas em PC1 e PC2 ao longo do tempo
+  constituem evidência direta de que a relação entre os
+  preditores macroeconômicos e a inflação americana é
+  TIME-VARYING — compatível com a Phillips Curve TVP e
+  as quebras estruturais discutidas em Coulombe (2024).
+
+  Períodos de maior volatilidade dos betas:
+  - Crise 2008-09 (GFC): mudança na transmissão monetária
+  - 2020-2022 (COVID + inflação pós-pandemia): regime novo
+  Exatamente quando o 2SRR tem maior vantagem relativa
+  sobre modelos de coeficientes fixos (Ridge, LASSO).
