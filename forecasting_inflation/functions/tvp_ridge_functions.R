@@ -1,9 +1,11 @@
 # ==============================================================
-# v2: tvp_ridge_functions.R
-#
-# Implementação do 2SRR (Coulombe 2024) em R.
-# Padrão Medeiros (ForecastingInflation) — compatível com
-#   rolling_window(), dataprep(), accumulate_model().
+# v4: tvp_ridge_functions.R
+# Autor: Felipe Dornelles
+# Data: 2024-06-20
+# Descrição: Implementação do 2SRR (Coulombe 2024) em R, seguindo o
+# padrão do codígo do  Gabriel Vasconcellos e estrutura do Medeiros
+# para compatibilidade com rolling_window(), dataprep(),
+# accumulate_model() do ForecastingInflation.
 #
 # Baseado em: "Time-Varying Parameters as Ridge Regressions"
 #   International Journal of Forecasting, 2025.
@@ -66,7 +68,7 @@ recover_beta <- function(X, alpha, C0) {
 
 # ==============================================================
 # 4. tvp_2srr_fit — estima o modelo dado X, y, lambda
-#   lambda selecionado externamente via glmnet (rápido)
+#   lambda selecionado externamente via glmnet
 # ==============================================================
 
 tvp_2srr_fit <- function(X, y, lam) {
@@ -77,7 +79,13 @@ tvp_2srr_fit <- function(X, y, lam) {
   beta1  <- recover_beta(X, alpha1, zz1$C0)
   resid1 <- y - rowSums(X * beta1)
 
-  # Variância dos resíduos (janela móvel 12 meses — sem GARCH)
+  # Variância dos resíduos (janela móvel 12 meses — sem GARCH
+  # diferente do Coulombe por quebra de execução. O Garch travava
+  # o processo em H1, com mais de 16 horas de estagnação,
+  # decidi optar por utilizar o método de rolling window para
+  # calcular a variância dos resíduos, o que é mais simples e
+  # rápido, embora possa ser menos preciso em alguns casos.)
+  
   T_obs      <- length(resid1)
   var_global <- var(resid1, na.rm = TRUE)
   if (!is.finite(var_global) || var_global <= 0) var_global <- 1
@@ -127,7 +135,7 @@ tvp_2srr_fit <- function(X, y, lam) {
 # 5. run2srr — wrapper padrão Medeiros
 #
 # Usa glmnet::cv.glmnet para selecionar lambda (igual ao runlasso
-# do Medeiros) — rápido. make_ZZt só é chamado 2x (passo 1 e 2).
+# do Medeiros). make_ZZt só é chamado 2x (passo 1 e 2).
 # ==============================================================
 
 # Original do Coulombe:
@@ -192,13 +200,13 @@ run2srr <- function(ind, df, variable, horizon,
     Xin_f  <- cbind(Xin_pca, dummy_col)
     Xout_f <- c(Xout_pca, dummy_out)
 
-    # 6. Seleciona lambda via glmnet (rápido — igual ao Medeiros)
+    # 6. Seleciona lambda via glmnet (igual ao Medeiros)
     cv_fit <- glmnet::cv.glmnet(Xin_f, yin,
                                  alpha  = 0,
                                  nfolds = kfold)
     lam_opt <- cv_fit$lambda.min
 
-    # 7. Estima 2SRR com lambda ótimo (make_ZZt chamado só 2x)
+    # 7. Estima 2SRR com lambda ótimo
     fit    <- tvp_2srr_fit(Xin_f, yin, lam_opt)
     beta_T <- fit$beta[nrow(fit$beta), ]
     fcast  <- sum(Xout_f * beta_T)
