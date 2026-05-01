@@ -2,9 +2,9 @@
 # 07_validacao_econometrica.R  v3.0
 #
 # PRE-REQUISITO: 06_coulombe_2SRR_pipeline.R v8.0 ja rodou
-#   com fc_2srr preenchido (nao NA)
+#   com fc_2srr preenchido (nao pode ser NA)
 #
-# CONTEUDO COMPLETO:
+# CONTEUDO:
 #   PARTE 1: Carrega todos os forecasts (Coulombe + Medeiros)
 #   PARTE 2: Metricas basicas (RMSE, MAE, MAPE) — tabela
 #   PARTE 3: Diebold-Mariano pairwise (2SRR vs TODOS)
@@ -602,6 +602,8 @@ for (h in hor) {
   ggsave(sprintf("results/figures/forecast_h%02d.pdf", h), p1,
          width = 10, height = 5)
 
+print(p1)
+
   # 12B: CSSED
   d_t <- (df$fc_ridge - df$realized)^2 - (df$fc_2srr - df$realized)^2
   df$cssed <- cumsum(d_t)
@@ -613,6 +615,8 @@ for (h in hor) {
     theme_minimal()
   ggsave(sprintf("results/figures/cssed_h%02d.pdf", h), p2,
          width = 10, height = 4)
+
+print(p2)
 
   cat(sprintf("  h=%d: graficos salvos\n", h))
 }
@@ -640,6 +644,8 @@ if (file.exists("results/beta_traj_h01.csv")) {
   }
 }
 cat("\n")
+
+print(p3)
 
 # ============================================================
 # PARTE 13: TABELA LATEX
