@@ -3,10 +3,10 @@
 #
 # | Caso | Especificação | Viabilidade | O que demonstra |
 # |------|--------------|-------------|-----------------|
-# | 1 | TVP-AR (só lags y) | ✅ Fácil, rápido | Valor puro do TVP sem informação extra |
-# | 2 | TVP-Factor (só PCA) | ✅ Fácil | Valor dos fatores sem persistência AR |
-# | 3 | TVP-FAVAR (fatores + y) | ✅ **06_coulombe_2SRR_pipeline.R** | Modelo completo (benchmark) |
-# | 3+ | TVP + 116 vars brutas | ❌ Precisa shrinkTVP | Não viável com TVPRR_cosso |
+# | 1 | TVP-AR (só lags y) |  rápido | Valor puro do TVP sem informação extra |
+# | 2 | TVP-Factor (só PCA) | Valor dos fatores sem persistência AR |
+# | 3 | TVP-FAVAR (fatores + y) | **06_coulombe_2SRR_pipeline.R** | Modelo completo (benchmark) |
+# | 3+ | TVP + 116 vars brutas | Precisa shrinkTVP | Não viável com TVPRR_cosso |
 # Compara Caso 1, 2 e 3
 # ============================================================
 
