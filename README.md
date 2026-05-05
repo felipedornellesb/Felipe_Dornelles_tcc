@@ -51,7 +51,7 @@ Execute os scripts na ordem abaixo a partir de `forecasting_inflation/`.
 | `03_call_model_felipe.R` | Versão inicial do 2SRR (legada) | `forecasts/2SRR.rda`, `forecasts/betas_2SRR.rda` |
 | `06_coulombe_2SRR_pipeline.R` | **Pipeline principal v8.0** — baixa funções Coulombe, executa loop POOS com 312 janelas, estima Ridge e 2SRR para h=1,3,6,12, salva betas para todos os horizontes | `forecasts/coulombe_fc_h{01/03/06/12}.csv`, `forecasts/coulombe_betas_2SRR.rda`, `forecasts/coulombe_betas_ridge.rda` |
 
-> ⚠️ O `06` demanda ~8–10h. Requer `fGarch` instalado (`install.packages("fGarch")`).
+>  O `06` demanda ~30 a 40h. Requer `fGarch` instalado (`install.packages("fGarch")`).
 
 ### Avaliação e Análise
 
