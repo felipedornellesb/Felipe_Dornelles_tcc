@@ -1,0 +1,31 @@
+\begin{table}[ht]
+\centering
+\caption{MSFE relativo ao AR --- Dados Americanos}
+\label{tab:msfe_relative}
+\begin{tabular}{llcccc}
+\hline\hline
+Target & h & AR & Ridge & TVP-Ridge & RF \\
+\hline
+GDP & 1 & 1.000 & 0.485$^{***}$ & \textbf{0.332}$^{***}$ & 0.403$^{***}$ \\
+GDP & 3 & 1.000 & 0.668$^{*}$ & \textbf{0.394}$^{***}$ & 0.500$^{***}$ \\
+GDP & 6 & 1.000 & 0.846 & \textbf{0.374}$^{***}$ & 0.593$^{***}$ \\
+GDP & 12 & 1.000 & 0.580$^{***}$ & \textbf{0.446}$^{***}$ & 0.515$^{***}$ \\
+INFLATION & 1 & 1.000 & 0.514$^{***}$ & 0.470$^{***}$ & \textbf{0.463}$^{***}$ \\
+INFLATION & 3 & 1.000 & 0.911 & \textbf{0.460}$^{***}$ & 0.514$^{***}$ \\
+INFLATION & 6 & 1.000 & 0.780 & \textbf{0.252}$^{***}$ & 0.555$^{**}$ \\
+INFLATION & 12 & 1.000 & 0.614$^{**}$ & \textbf{0.383}$^{***}$ & 0.418$^{***}$ \\
+IR & 1 & 1.000 & 0.620$^{**}$ & \textbf{0.329}$^{***}$ & 0.466$^{***}$ \\
+IR & 3 & 1.000 & 0.657 & \textbf{0.415}$^{***}$ & 0.458$^{***}$ \\
+IR & 6 & 1.000 & 0.673 & \textbf{0.394}$^{***}$ & 0.407$^{***}$ \\
+IR & 12 & 1.000 & 0.805 & \textbf{0.462}$^{***}$ & 0.737 \\
+SPREAD & 1 & 1.000 & 0.540$^{***}$ & \textbf{0.270}$^{***}$ & 0.329$^{***}$ \\
+SPREAD & 3 & 1.000 & 0.555$^{***}$ & \textbf{0.311}$^{***}$ & 0.480$^{***}$ \\
+SPREAD & 6 & 1.000 & 0.607$^{**}$ & \textbf{0.412}$^{***}$ & 0.617$^{**}$ \\
+SPREAD & 12 & 1.000 & 0.526$^{**}$ & \textbf{0.328}$^{***}$ & 0.456$^{***}$ \\
+\hline\hline
+\end{tabular}
+\begin{tablenotes}
+\small
+\item Nota: Valores representam MSFE relativo ao AR. Valores $< 1$ indicam modelo superior ao benchmark. Negrito indica melhor modelo. $^{***}$, $^{**}$, $^{*}$ indicam significancia no teste de Diebold-Mariano a 1\%, 5\% e 10\%.
+\end{tablenotes}
+\end{table}
