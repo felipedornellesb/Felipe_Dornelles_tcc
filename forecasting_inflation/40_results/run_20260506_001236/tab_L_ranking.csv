@@ -1,0 +1,12 @@
+"Modelo","Vitorias","Top3","Media_MSFE_rel"
+"ElNET",3,4,0.9157
+"RF",1,2,0.9712
+"LASSO",0,4,0.9232
+"AdaLASSO",0,0,0.9895
+"AdaElNET",0,1,0.995
+"CSR",0,1,0.9958
+"T.Factor",0,0,1.0221
+"Ridge",0,0,1.0522
+"2SRR",0,0,1.0677
+"Factor",0,0,1.111
+"Bagging",0,0,1.4297
