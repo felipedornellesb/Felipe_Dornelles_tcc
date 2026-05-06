@@ -1,10 +1,9 @@
-###############################################################################
 rm(list = ls())
 set.seed(2024)
 
 cat("
 ==============================================================
- 11_results_analysis.R - v0.0.2
+ 10_results_analysis.R - v0.0.3
 ==============================================================
 \n")
 
@@ -258,20 +257,38 @@ theme_set(theme_minimal(base_size = 13) +
                   panel.grid.minor = element_blank(),
                   strip.text = element_text(face = "bold")))
 
-# Paleta de cores: gerar automaticamente para N modelos
-set.seed(42)
-if (n_models <= 12) {
-  paleta_base <- c("black", "grey55", "steelblue", "#D32F2F", "#2E7D32",
-                   "#FF9800", "#9C27B0", "#00BCD4", "#795548", "#E91E63",
-                   "#3F51B5", "#CDDC39")
-} else {
-  paleta_base <- c("black", "grey55",
-                   scales::hue_pal()(n_models - 1))
-}
-cores_modelos <- setNames(
-  c("black", paleta_base[2:(n_models + 1)]),
-  c("Realizado", methods)
+# ---- Paleta de cores com destaque para 2SRR e Realizado ----
+# 2SRR em vermelho forte, AR em cinza, Realizado em preto,
+# demais em tons discretos para nao competir visualmente
+cores_fixas <- c(
+  "Realizado"  = "black",
+  "2SRR"       = "#D32F2F",
+  "AR"         = "grey55",
+  "AR_BIC"     = "grey70",
+  "rw"         = "grey80",
+  "Ridge"      = "#90CAF9",
+  "LASSO"      = "#A5D6A7",
+  "AdaLASSO"   = "#C5E1A5",
+  "ElNET"      = "#B0BEC5",
+  "AdaElNET"   = "#BCAAA4",
+  "Factor"     = "#CE93D8",
+  "T.Factor"   = "#E1BEE7",
+  "RF"         = "#80CBC4",
+  "Bagging"    = "#FFCC80",
+  "CSR"        = "#FFF59D"
 )
+
+# Garantir que todos os metodos tenham cor (fallback para cinza)
+cores_modelos <- cores_fixas[intersect(names(cores_fixas),
+                                        c("Realizado", methods))]
+faltam <- setdiff(methods, names(cores_modelos))
+if (length(faltam) > 0) {
+  extras <- setNames(rep("grey75", length(faltam)), faltam)
+  cores_modelos <- c(cores_modelos, extras)
+}
+# Manter Realizado na frente
+cores_modelos <- c("Realizado" = "black",
+                   cores_modelos[names(cores_modelos) != "Realizado"])
 
 cat("=== Configuracao ===\n")
 cat(sprintf("  Target:     %s\n", paste(targets, collapse = ", ")))
@@ -281,9 +298,8 @@ cat(sprintf("  n_eval:     %d\n", n_eval))
 cat(sprintf("  Chaves:     %d combinacoes\n\n", length(res)))
 
 ###############################################################################
-# PARTE A -- Serie Real + Previsoes por Horizonte
+# PARTE A -- Serie Real + Previsoes por Horizonte (com destaque 2SRR)
 ###############################################################################
-cat("=======================================================\n")
 cat(" PARTE A -- Graficos: Serie Real vs Previsoes\n")
 
 for (key in names(res)) {
@@ -291,7 +307,6 @@ for (key in names(res)) {
   n_e <- length(r$actuals)
   if (n_e < 10) next
 
-  # Montar dataframe
   df_plot <- data.frame(Date = r$dates[1:n_e], Realizado = r$actuals)
   for (m in methods) {
     if (m %in% colnames(r$preds)) {
@@ -303,19 +318,39 @@ for (key in names(res)) {
     pivot_longer(-Date, names_to = "Serie", values_to = "Valor") |>
     mutate(Serie = factor(Serie, levels = c("Realizado", methods)))
 
-  # Linewidths
-  lw_vals <- c(Realizado = 1.3)
-  for (m in methods) lw_vals[m] <- 0.5
+  # Ordenar para que 2SRR e Realizado sejam desenhados por ultimo (ficam por cima)
+  df_long <- df_long |>
+    mutate(ordem_plot = case_when(
+      Serie == "2SRR"      ~ 3L,
+      Serie == "Realizado" ~ 2L,
+      TRUE                 ~ 1L
+    )) |>
+    arrange(ordem_plot)
 
-  p <- ggplot(df_long, aes(Date, Valor, color = Serie, linewidth = Serie)) +
-    geom_line(na.rm = TRUE, alpha = 0.85) +
+  # Linewidths: 2SRR e Realizado grossos, demais finos
+  lw_vals <- setNames(rep(0.35, length(methods) + 1),
+                      c("Realizado", methods))
+  lw_vals["Realizado"] <- 1.3
+  lw_vals["2SRR"]      <- 1.1
+
+  # Alpha: 2SRR e Realizado opacos, demais semi-transparentes
+  alpha_vals <- setNames(rep(0.35, length(methods) + 1),
+                         c("Realizado", methods))
+  alpha_vals["Realizado"] <- 1.0
+  alpha_vals["2SRR"]      <- 0.95
+
+  p <- ggplot(df_long, aes(Date, Valor, color = Serie, linewidth = Serie,
+                            alpha = Serie)) +
+    geom_line(na.rm = TRUE) +
     scale_color_manual(values = cores_modelos) +
     scale_linewidth_manual(values = lw_vals, guide = "none") +
+    scale_alpha_manual(values = alpha_vals, guide = "none") +
     labs(
       title    = sprintf("%s -- Horizonte h = %d", r$target, r$horizon),
-      subtitle = "Serie realizada vs previsoes pseudo-out-of-sample",
+      subtitle = "Serie realizada (preto) vs 2SRR (vermelho) vs demais modelos",
       x = NULL, y = "Valor"
-    )
+    ) +
+    guides(color = guide_legend(nrow = 2))
 
   fname <- sprintf("fig_A_forecast_%s_h%02d", r$target, r$horizon)
   ggsave(file.path(results_dir, paste0(fname, ".png")), p,
@@ -383,7 +418,6 @@ cat("\n  [OK] tab_B_msfe_relative.csv\n  [OK] tab_B_rmse_absolute.csv\n")
 ###############################################################################
 # PARTE C -- Teste Diebold-Mariano
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE C -- Teste Diebold-Mariano (DM)\n")
 
 dm_rows <- list()
@@ -435,7 +469,6 @@ cat("\n  [OK] tab_C_diebold_mariano.csv\n")
 ###############################################################################
 # PARTE D -- CSFE (Cumulative Squared Forecast Errors)
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE D -- CSFE (Cumulative Squared Forecast Errors)\n")
 
 for (key in names(res)) {
@@ -475,7 +508,6 @@ for (key in names(res)) {
 ###############################################################################
 # PARTE E -- Analise de Residuos (histograma + QQ-plot + ACF)
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE E -- Analise de Residuos\n")
 
 # Para nao gerar centenas de graficos, focar nos modelos principais
@@ -542,7 +574,6 @@ for (key in names(res)) {
 ###############################################################################
 # PARTE F -- Model Confidence Set (MCS)
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE F -- Model Confidence Set (MCS)\n")
 
 if (has_mcs) {
@@ -604,7 +635,6 @@ if (has_mcs) {
 ###############################################################################
 # PARTE G -- TVP Betas ao Longo do Tempo
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE G -- TVP Betas (2SRR Full Sample)\n")
 
 if (!is.null(forecast_output$tvp_full)) {
@@ -645,15 +675,21 @@ if (!is.null(forecast_output$tvp_full)) {
 }
 
 ###############################################################################
-# PARTE H -- Grafico MSFE Relativo (barras por horizonte)
+# PARTE H -- Grafico MSFE Relativo (barras por horizonte) com destaque 2SRR
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE H -- Grafico MSFE Relativo (barras)\n")
 
-# Selecionar modelos principais para visualizacao (senao fica poluido)
-modelos_barra <- intersect(c("AR", "Ridge", "LASSO", "AdaLASSO", "ElNET",
+modelos_barra <- intersect(c("Ridge", "LASSO", "AdaLASSO", "ElNET",
                              "RF", "2SRR", "Factor", "CSR", "Bagging"),
                            methods)
+
+# Cores para barras: 2SRR vermelho, demais cinza/pastel
+cores_barra <- setNames(rep("grey70", length(modelos_barra)), modelos_barra)
+cores_barra["2SRR"] <- "#D32F2F"
+if ("Ridge"    %in% modelos_barra) cores_barra["Ridge"]    <- "#90CAF9"
+if ("RF"       %in% modelos_barra) cores_barra["RF"]       <- "#80CBC4"
+if ("LASSO"    %in% modelos_barra) cores_barra["LASSO"]    <- "#A5D6A7"
+if ("AdaLASSO" %in% modelos_barra) cores_barra["AdaLASSO"] <- "#C5E1A5"
 
 df_rel_long <- df_rel |>
   pivot_longer(cols = all_of(methods), names_to = "Modelo",
@@ -670,9 +706,10 @@ for (tgt in unique(df_rel_long$Target)) {
              alpha = 0.85) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "red",
                linewidth = 0.7) +
+    scale_fill_manual(values = cores_barra) +
     labs(
       title    = sprintf("MSFE Relativo ao AR -- %s", tgt),
-      subtitle = "Abaixo de 1 = modelo supera o benchmark AR",
+      subtitle = "Abaixo de 1 = supera AR. Vermelho = 2SRR",
       x = NULL, y = "MSFE / MSFE(AR)"
     ) +
     coord_cartesian(
@@ -688,7 +725,6 @@ for (tgt in unique(df_rel_long$Target)) {
 ###############################################################################
 # PARTE I -- Tabela LaTeX-Ready
 ###############################################################################
-cat("\n=======================================================\n")
 cat(" PARTE I -- Tabela LaTeX\n")
 
 # Selecionar modelos para a tabela LaTeX (os mais relevantes)
@@ -759,10 +795,254 @@ sink()
 cat(sprintf("  [OK] %s\n", latex_file))
 
 ###############################################################################
-# PARTE J -- Resumo Final no Console
+# PARTE J -- Performance por Regime de Volatilidade
 ###############################################################################
-cat("\n\n")
-cat("==============================================================\n")
+cat(" PARTE J -- Performance por Regime (Normal vs Picos)\n")
+
+regime_rows <- list()
+for (key in names(res)) {
+  r   <- res[[key]]
+  n_e <- length(r$actuals)
+  if (n_e < 30) next
+
+  # Definir regime: picos = acima do percentil 80 em valor absoluto
+  limiar <- quantile(abs(r$actuals), 0.80, na.rm = TRUE)
+  regime <- ifelse(abs(r$actuals) >= limiar, "Picos", "Normal")
+
+  for (reg in c("Normal", "Picos")) {
+    idx <- which(regime == reg)
+    if (length(idx) < 10) next
+
+    row <- data.frame(Target  = r$target,
+                      Horizon = r$horizon,
+                      Regime  = reg,
+                      N_obs   = length(idx),
+                      stringsAsFactors = FALSE)
+
+    for (m in methods) {
+      erros <- (r$preds[idx, m] - r$actuals[idx])^2
+      ok    <- !is.na(erros)
+      if (sum(ok) > 5) {
+        row[[paste0("MSFE_", m)]] <- mean(erros[ok])
+      } else {
+        row[[paste0("MSFE_", m)]] <- NA
+      }
+    }
+    regime_rows[[paste0(key, "_", reg)]] <- row
+  }
+}
+
+df_regime <- do.call(rbind, regime_rows)
+rownames(df_regime) <- NULL
+
+# Calcular MSFE relativo ao AR por regime
+df_regime_rel <- df_regime[, c("Target", "Horizon", "Regime", "N_obs")]
+for (m in methods) {
+  df_regime_rel[[m]] <- round(
+    df_regime[[paste0("MSFE_", m)]] / df_regime[["MSFE_AR"]], 4)
+}
+
+cat("TABELA MSFE RELATIVO AO AR POR REGIME:\n")
+cat("(Mostra onde o 2SRR ganha/perde em periodos de alta volatilidade)\n\n")
+print(df_regime_rel)
+
+write.csv(df_regime_rel, file.path(results_dir, "tab_K_regime_msfe.csv"),
+          row.names = FALSE)
+cat("\n  [OK] tab_K_regime_msfe.csv\n")
+
+# Grafico comparativo: 2SRR vs AR vs Ridge por regime
+modelos_regime <- intersect(c("2SRR", "Ridge", "RF", "LASSO"), methods)
+
+df_regime_plot <- df_regime_rel |>
+  pivot_longer(cols = all_of(modelos_regime), names_to = "Modelo",
+               values_to = "MSFE_rel") |>
+  mutate(Horizonte = factor(paste0("h=", Horizon),
+                            levels = paste0("h=", horizons_list)))
+
+cores_regime <- c("2SRR" = "#D32F2F", "Ridge" = "#90CAF9",
+                  "RF" = "#80CBC4", "LASSO" = "#A5D6A7")
+
+p <- ggplot(df_regime_plot,
+            aes(Horizonte, MSFE_rel, fill = Modelo)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6,
+           alpha = 0.85) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  facet_wrap(~ Regime, ncol = 2) +
+  scale_fill_manual(values = cores_regime) +
+  labs(
+    title    = "MSFE Relativo ao AR por Regime de Volatilidade",
+    subtitle = "Normal = 80% centrais | Picos = 20% mais extremos",
+    x = NULL, y = "MSFE / MSFE(AR)"
+  )
+
+ggsave(file.path(results_dir, "fig_K_regime_comparison.png"), p,
+       width = 11, height = 5.5, dpi = 250)
+cat("  [OK] fig_K_regime_comparison.png\n")
+
+###############################################################################
+# PARTE K -- Ranking Geral (quantas vezes cada modelo e o melhor)
+###############################################################################
+cat(" PARTE K -- Ranking Geral dos Modelos\n")
+
+# Contar quantas vezes cada modelo tem o menor MSFE relativo
+modelos_competidores <- setdiff(methods, c("AR", "rw", "AR_BIC"))
+ranking <- data.frame(Modelo = modelos_competidores,
+                      Vitorias = 0L,
+                      Top3 = 0L,
+                      Media_MSFE_rel = NA_real_,
+                      stringsAsFactors = FALSE)
+
+for (m in modelos_competidores) {
+  msfe_vals <- c()
+  for (i in seq_len(nrow(df_rel))) {
+    v <- df_rel[i, m]
+    if (!is.null(v) && !is.na(v)) {
+      msfe_vals <- c(msfe_vals, v)
+
+      # Verificar se e o melhor nesta combinacao
+      all_v <- sapply(modelos_competidores, function(mm) {
+        val <- df_rel[i, mm]
+        if (is.null(val) || is.na(val)) return(Inf)
+        val
+      })
+      if (v == min(all_v, na.rm = TRUE)) {
+        ranking$Vitorias[ranking$Modelo == m] <-
+          ranking$Vitorias[ranking$Modelo == m] + 1L
+      }
+      # Top 3
+      if (v <= sort(all_v)[min(3, length(all_v))]) {
+        ranking$Top3[ranking$Modelo == m] <-
+          ranking$Top3[ranking$Modelo == m] + 1L
+      }
+    }
+  }
+  ranking$Media_MSFE_rel[ranking$Modelo == m] <- round(mean(msfe_vals), 4)
+}
+
+ranking <- ranking |> arrange(desc(Vitorias), Media_MSFE_rel)
+cat("RANKING GERAL (por numero de vitorias e MSFE medio):\n\n")
+print(ranking)
+
+write.csv(ranking, file.path(results_dir, "tab_L_ranking.csv"),
+          row.names = FALSE)
+cat("\n  [OK] tab_L_ranking.csv\n")
+
+###############################################################################
+# PARTE L -- CSFE focado: 2SRR vs 3 melhores concorrentes
+###############################################################################
+cat(" PARTE L -- CSFE focado (2SRR vs principais rivais)\n")
+
+# Identificar os 3 modelos com menor MSFE medio (exceto 2SRR e AR)
+rivais <- ranking |>
+  filter(Modelo != "2SRR") |>
+  head(3) |>
+  pull(Modelo)
+
+modelos_foco <- c("2SRR", rivais)
+cat(sprintf("  Modelos no grafico: %s\n\n", paste(modelos_foco, collapse = ", ")))
+
+cores_foco <- c("2SRR" = "#D32F2F")
+paleta_rivais <- c("#1976D2", "#388E3C", "#F57C00")
+for (j in seq_along(rivais)) {
+  cores_foco[rivais[j]] <- paleta_rivais[j]
+}
+
+for (key in names(res)) {
+  r   <- res[[key]]
+  n_e <- length(r$actuals)
+  if (n_e < 20) next
+
+  e2_ar   <- (r$preds[1:n_e, "AR"] - r$actuals)^2
+  df_csfe <- data.frame(Date = r$dates[1:n_e])
+
+  for (m in modelos_foco) {
+    if (!m %in% colnames(r$preds)) next
+    e2_m <- (r$preds[1:n_e, m] - r$actuals)^2
+    csfe <- cumsum(ifelse(is.na(e2_ar) | is.na(e2_m), 0, e2_ar - e2_m))
+    df_csfe[[m]] <- csfe
+  }
+
+  cols_presentes <- intersect(modelos_foco, names(df_csfe))
+  if (length(cols_presentes) < 2) next
+
+  df_csfe_long <- df_csfe |>
+    pivot_longer(cols = all_of(cols_presentes),
+                 names_to = "Modelo", values_to = "CSFE")
+
+  # Linewidth: 2SRR mais grosso
+  lw_foco <- setNames(rep(0.6, length(cols_presentes)), cols_presentes)
+  lw_foco["2SRR"] <- 1.2
+
+  p <- ggplot(df_csfe_long, aes(Date, CSFE, color = Modelo,
+                                 linewidth = Modelo)) +
+    geom_line() +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+    scale_color_manual(values = cores_foco) +
+    scale_linewidth_manual(values = lw_foco, guide = "none") +
+    labs(
+      title    = sprintf("CSFE -- %s, h = %d (2SRR vs rivais)",
+                         r$target, r$horizon),
+      subtitle = "Acima de 0 = supera AR. Comparacao direta com concorrentes",
+      x = NULL, y = "CSFE (acumulado)"
+    )
+
+  fname <- sprintf("fig_M_csfe_foco_%s_h%02d", r$target, r$horizon)
+  ggsave(file.path(results_dir, paste0(fname, ".png")), p,
+         width = 10, height = 5, dpi = 250)
+  cat(sprintf("  [OK] %s.png\n", fname))
+}
+
+###############################################################################
+# PARTE M -- Janelas temporais: onde o 2SRR perde para o melhor rival
+###############################################################################
+cat(" PARTE M -- Analise temporal de derrotas do 2SRR\n")
+
+if ("2SRR" %in% methods && length(rivais) > 0) {
+  melhor_rival <- rivais[1]
+
+  for (key in names(res)) {
+    r   <- res[[key]]
+    n_e <- length(r$actuals)
+    if (n_e < 20) next
+    if (!melhor_rival %in% colnames(r$preds)) next
+
+    e2_2srr  <- (r$preds[1:n_e, "2SRR"] - r$actuals)^2
+    e2_rival <- (r$preds[1:n_e, melhor_rival] - r$actuals)^2
+
+    # Diferenca: positivo = 2SRR errou MAIS que o rival (derrota do 2SRR)
+    diff_e2 <- e2_2srr - e2_rival
+    diff_e2[is.na(diff_e2)] <- 0
+
+    df_diff <- data.frame(
+      Date   = r$dates[1:n_e],
+      Diff   = diff_e2,
+      Derrota = ifelse(diff_e2 > 0, "2SRR pior", "2SRR melhor")
+    )
+
+    p <- ggplot(df_diff, aes(Date, Diff, fill = Derrota)) +
+      geom_col(width = 25, alpha = 0.7) +
+      geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+      scale_fill_manual(values = c("2SRR pior"   = "#D32F2F",
+                                   "2SRR melhor" = "#2E7D32")) +
+      labs(
+        title    = sprintf("Diferenca de erro quadratico: 2SRR vs %s (h=%d)",
+                           melhor_rival, r$horizon),
+        subtitle = "Barras vermelhas = periodos onde o 2SRR errou mais",
+        x = NULL, y = "e2(2SRR) - e2(rival)"
+      )
+
+    fname <- sprintf("fig_N_diff_%s_h%02d", r$target, r$horizon)
+    ggsave(file.path(results_dir, paste0(fname, ".png")), p,
+           width = 10, height = 4.5, dpi = 250)
+    cat(sprintf("  [OK] %s.png\n", fname))
+  }
+} else {
+  cat("  2SRR ou rivais nao disponiveis para comparacao.\n")
+}
+
+###############################################################################
+# PARTE N -- Resumo Final no Console
+###############################################################################
 cat(" RESUMO FINAL DOS RESULTADOS\n")
 
 n_png <- length(list.files(results_dir, pattern = "\\.png$"))
@@ -775,7 +1055,6 @@ cat(sprintf("  PNG gerados: %3d\n", n_png))
 cat(sprintf("  PDF gerados: %3d\n", n_pdf))
 cat(sprintf("  CSV gerados: %3d\n", n_csv))
 cat(sprintf("  TEX gerados: %3d\n", n_tex))
-cat("--------------------------------------------------------------\n")
 
 cat("\n  MELHOR MODELO POR HORIZONTE (MSFE relativo):\n\n")
 for (i in seq_len(nrow(df_rel))) {
@@ -790,4 +1069,4 @@ for (i in seq_len(nrow(df_rel))) {
               df_rel$Target[i], df_rel$Horizon[i], best_m, best_v))
 }
 
-cat(" Analise concluida com sucesso.\n")
+cat(" Analise concluida\n")
