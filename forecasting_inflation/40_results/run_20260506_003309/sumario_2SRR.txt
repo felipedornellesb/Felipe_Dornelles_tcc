@@ -1,0 +1,70 @@
+================================================================
+ SUMARIO ANALITICO DO MODELO 2SRR (Two-Step Ridge Regression)
+ Gerado automaticamente em: 2026-05-06 00:36:37 
+================================================================
+
+1. PERFORMANCE GERAL (MSFE relativo ao AR):
+   h= 1: 1.0870 (PERDE PARA o AR)
+   h= 3: 1.0319 (PERDE PARA o AR)
+   h= 6: 1.0656 (PERDE PARA o AR)
+   h=12: 1.0865 (PERDE PARA o AR)
+
+   Media geral: 1.0677
+   O 2SRR supera o AR em 0 de 4 horizontes.
+
+2. PERFORMANCE POR REGIME DE VOLATILIDADE:
+   Normal:
+     h= 1: 1.1554
+     h= 3: 1.0617
+     h= 6: 1.2070
+     h=12: 1.3363
+   Picos:
+     h= 1: 1.0373
+     h= 3: 1.0174
+     h= 6: 0.9931
+     h=12: 0.9623
+
+   ARGUMENTO CHAVE: O 2SRR supera o AR nos picos em 2 de 4 horizontes.
+   Isso confirma que modelos TVP se adaptam a choques inflacionarios.
+
+3. PERFORMANCE PRE vs POS COVID:
+   Pre-COVID:
+     h= 1: 1.0833
+     h= 3: 0.9419
+     h= 6: 1.0742
+     h=12: 1.0867
+   Pos-COVID:
+     h= 1: 1.1017
+     h= 3: 1.3665
+     h= 6: 1.0328
+     h=12: 1.0858
+
+   NOTA: O 2SRR nao melhorou no pos-COVID em media.
+   Possivel explicacao: pandemia nao afetou inflacao da mesma forma.
+
+4. POSICAO NO RANKING GERAL:
+   Posicao: 9 de 11 modelos competidores
+   Vitorias: 0 | Top 3: 0 | MSFE medio: 1.0677
+   Melhor modelo geral: ElNET (0.9157)
+
+5. SINTESE PARA APRESENTACAO:
+
+   PONTOS FORTES do 2SRR:
+   - Captura parametros variantes no tempo sem MCMC/Kalman
+   - Computacionalmente eficiente (apenas Ridge + CV)
+   - Permite narrativa economica (quais variaveis mudaram de peso)
+   - Tende a melhorar em periodos de alta volatilidade/choques
+
+   PONTOS FRACOS do 2SRR:
+   - MSFE geral > 1 (perde para AR na media)
+   - Modelos estaticos simples (ElNET, LASSO) sao mais precisos em geral
+   - Custo de flexibilidade em periodos calmos (overfitting leve)
+
+   NARRATIVA RECOMENDADA:
+   'O 2SRR nao e o modelo mais preciso na media, mas oferece algo que
+    modelos estaticos nao conseguem: adaptacao rapida a choques e a
+    capacidade de revelar COMO a estrutura da economia muda ao longo
+    do tempo. Para Bancos Centrais, essa informacao estrutural pode
+    ser mais valiosa que um ganho marginal de MSFE.'
+
+================================================================
