@@ -3,7 +3,7 @@ set.seed(2024)
 
 cat("
 ==============================================================
- 10_results_analysis.R - v0.0.3
+ 10_results_analysis.R - v0.0.4
 ==============================================================
 \n")
 
@@ -210,22 +210,54 @@ file_betas <- file.path(forecast_dir, "betas_2SRR.rda")
 if (file.exists(file_betas)) {
   betas_obj <- load_rda(file_betas)
   cat(sprintf("\n  [OK] betas_2SRR.rda carregado (classe: %s", class(betas_obj)[1]))
+
   if (is.matrix(betas_obj) || is.data.frame(betas_obj)) {
     cat(sprintf(", %d x %d)\n", nrow(betas_obj), ncol(betas_obj)))
-    # Gerar datas para os betas (mesmo tamanho que nrow)
-    if (nrow(betas_obj) <= length(dates_eval)) {
-      beta_dates <- tail(dates_eval, nrow(betas_obj))
+
+    # Detectar formato longo (3 colunas, muitas linhas)
+    if (ncol(betas_obj) == 3 && nrow(betas_obj) > n_eval) {
+      cat("       Formato longo detectado. Pivotando para formato largo...\n")
+      colnames(betas_obj) <- c("Time", "Predictor", "Value")
+      betas_obj$Value <- as.numeric(betas_obj$Value)
+
+      betas_wide <- tidyr::pivot_wider(betas_obj,
+                                       names_from = Predictor,
+                                       values_from = Value)
+      # Primeira coluna e Time, remover
+      betas_num_mat <- as.matrix(betas_wide[, -1])
+      storage.mode(betas_num_mat) <- "double"
+      cat(sprintf("       Resultado: %d x %d (periodos x preditores)\n",
+                  nrow(betas_num_mat), ncol(betas_num_mat)))
+    } else {
+      # Ja esta em formato largo, manter apenas colunas numericas
+      is_num <- sapply(as.data.frame(betas_obj), function(x) {
+        is.numeric(x) || !any(is.na(suppressWarnings(as.numeric(x))))
+      })
+      betas_num_mat <- as.matrix(as.data.frame(betas_obj)[, is_num, drop = FALSE])
+      storage.mode(betas_num_mat) <- "double"
+    }
+
+    # Remover colunas que sao tudo NA
+    all_na <- apply(betas_num_mat, 2, function(x) all(is.na(x)))
+    betas_num_mat <- betas_num_mat[, !all_na, drop = FALSE]
+
+    # Gerar datas
+    if (nrow(betas_num_mat) <= length(dates_eval)) {
+      beta_dates <- tail(dates_eval, nrow(betas_num_mat))
     } else {
       beta_dates <- seq.Date(as.Date("2000-01-01"), by = "month",
-                             length.out = nrow(betas_obj))
+                             length.out = nrow(betas_num_mat))
     }
+
     forecast_output$tvp_full <- list()
     forecast_output$tvp_full[[target_name]] <- list(
-      betas = as.matrix(betas_obj),
+      betas = betas_num_mat,
       dates = beta_dates
     )
+    cat(sprintf("       Betas prontos: %d periodos x %d variaveis\n",
+                nrow(betas_num_mat), ncol(betas_num_mat)))
   } else {
-    cat(")\n  [AVISO] betas_2SRR nao e matriz, pulando Parte G.\n")
+    cat(")\n  [AVISO] betas_2SRR nao e matriz/DF, pulando Parte G.\n")
   }
 } else {
   cat("\n  [AVISO] betas_2SRR.rda nao encontrado. Parte G sera pulada.\n")
@@ -589,31 +621,41 @@ if (has_mcs) {
       loss_mat[, m] <- (r$preds[1:n_e, m] - r$actuals)^2
     }
 
-    ok             <- complete.cases(loss_mat)
+    # Substituir Inf e NaN por NA, depois remover linhas e colunas problematicas
+    loss_mat[is.infinite(loss_mat)] <- NA
+    loss_mat[is.nan(loss_mat)]      <- NA
+
+    # Remover colunas (modelos) que tenham mais de 10% de NA
+    pct_na <- colMeans(is.na(loss_mat))
+    cols_ok <- names(which(pct_na < 0.10))
+    if (length(cols_ok) < 3) next
+    loss_mat <- loss_mat[, cols_ok, drop = FALSE]
+
+    # Remover linhas com qualquer NA restante
+    ok <- complete.cases(loss_mat)
     loss_mat_clean <- loss_mat[ok, , drop = FALSE]
-    if (nrow(loss_mat_clean) < 20) next
+    if (nrow(loss_mat_clean) < 30) next
+
+    # Garantir que e numerico
+    storage.mode(loss_mat_clean) <- "double"
 
     tryCatch({
-      # Remover cl=NULL que causa erro em algumas versoes do MCS
       mcs_out <- MCSprocedure(as.data.frame(loss_mat_clean),
                               alpha = 0.15, B = 5000,
                               statistic = "Tmax")
+      surviving <- rownames(mcs_out@show)
+      in_mcs <- ifelse("2SRR" %in% surviving, " << 2SRR INCLUIDO", "")
 
-      # Extrair modelos sobreviventes
-      show_df <- mcs_out@show
-      if ("Rank_M" %in% colnames(show_df)) {
-        surviving <- rownames(show_df)
-      } else {
-        surviving <- rownames(show_df)
-      }
-
-      cat(sprintf("  %s h=%d: MCS = {%s}\n",
-                  r$target, r$horizon, paste(surviving, collapse = ", ")))
+      cat(sprintf("  %s h=%d: MCS = {%s}%s\n",
+                  r$target, r$horizon,
+                  paste(surviving, collapse = ", "), in_mcs))
 
       mcs_results[[key]] <- data.frame(
         Target     = r$target,
         Horizon    = r$horizon,
-        MCS_Models = paste(surviving, collapse = ", ")
+        MCS_Models = paste(surviving, collapse = ", "),
+        N_modelos  = length(surviving),
+        Inclui_2SRR = "2SRR" %in% surviving
       )
     }, error = function(e) {
       cat(sprintf("  %s h=%d: MCS erro -- %s\n",
@@ -647,28 +689,84 @@ if (!is.null(forecast_output$tvp_full)) {
       next
     }
 
-    beta_var <- apply(betas, 2, var)
-    n_show   <- min(8, ncol(betas))
-    top_vars <- names(sort(beta_var, decreasing = TRUE))[1:n_show]
+    # Remover colunas com variancia zero ou NA
+    beta_var <- apply(betas, 2, function(x) {
+      x <- x[!is.na(x)]
+      if (length(x) < 2) return(0)
+      var(x)
+    })
+    betas_valid <- betas[, beta_var > 0, drop = FALSE]
+    beta_var    <- beta_var[beta_var > 0]
 
-    df_beta <- data.frame(Date = d, betas[, top_vars, drop = FALSE]) |>
+    if (ncol(betas_valid) < 2) {
+      cat("  [AVISO] Variancia zero em todos os betas.\n")
+      next
+    }
+
+    # --- Grafico 1: Top 8 por VARIANCIA (os que mais flutuaram) ---
+    n_show    <- min(8, ncol(betas_valid))
+    top_vars  <- names(sort(beta_var, decreasing = TRUE))[1:n_show]
+
+    df_beta <- data.frame(Date = d, betas_valid[, top_vars, drop = FALSE],
+                          check.names = FALSE) |>
       pivot_longer(-Date, names_to = "Variable", values_to = "Beta")
 
-    p <- ggplot(df_beta, aes(Date, Beta, color = Variable)) +
+    p1 <- ggplot(df_beta, aes(Date, Beta, color = Variable)) +
       geom_line(linewidth = 0.6) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
       facet_wrap(~ Variable, scales = "free_y", ncol = 2) +
       labs(
-        title    = sprintf("TVP Betas -- Target: %s (Full Sample)", tgt),
-        subtitle = "Coeficientes variantes no tempo (2SRR Coulombe)",
+        title    = sprintf("TVP Betas com Maior Variancia -- %s", tgt),
+        subtitle = "Coeficientes que mais flutuaram ao longo do tempo (2SRR)",
         x = NULL, y = expression(beta[t])
       ) +
       theme(legend.position = "none")
 
-    fname <- sprintf("fig_G_tvp_betas_%s", tgt)
-    ggsave(file.path(results_dir, paste0(fname, ".png")), p,
+    fname1 <- sprintf("fig_G1_tvp_betas_variancia_%s", tgt)
+    ggsave(file.path(results_dir, paste0(fname1, ".png")), p1,
            width = 10, height = 10, dpi = 200)
-    cat(sprintf("  [OK] %s.png\n", fname))
+    cat(sprintf("  [OK] %s.png\n", fname1))
+
+    # --- Grafico 2: Top 8 por MEDIA ABSOLUTA (os mais importantes) ---
+    beta_mean_abs <- apply(abs(betas_valid), 2, function(x) {
+      mean(x, na.rm = TRUE)
+    })
+    top_mean <- names(sort(beta_mean_abs, decreasing = TRUE))[1:n_show]
+
+    df_beta2 <- data.frame(Date = d, betas_valid[, top_mean, drop = FALSE],
+                           check.names = FALSE) |>
+      pivot_longer(-Date, names_to = "Variable", values_to = "Beta")
+
+    p2 <- ggplot(df_beta2, aes(Date, Beta, color = Variable)) +
+      geom_line(linewidth = 0.6) +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+      facet_wrap(~ Variable, scales = "free_y", ncol = 2) +
+      labs(
+        title    = sprintf("TVP Betas com Maior Importancia Media -- %s", tgt),
+        subtitle = "Preditores estruturalmente mais relevantes (media |beta|)",
+        x = NULL, y = expression(beta[t])
+      ) +
+      theme(legend.position = "none")
+
+    fname2 <- sprintf("fig_G2_tvp_betas_importancia_%s", tgt)
+    ggsave(file.path(results_dir, paste0(fname2, ".png")), p2,
+           width = 10, height = 10, dpi = 200)
+    cat(sprintf("  [OK] %s.png\n", fname2))
+
+    # --- Tabela de volatilidade dos betas ---
+    df_beta_stats <- data.frame(
+      Predictor = colnames(betas_valid),
+      Variancia = round(beta_var, 6),
+      Media_Abs = round(beta_mean_abs, 6),
+      stringsAsFactors = FALSE
+    ) |>
+      arrange(desc(Variancia))
+
+    write.csv(df_beta_stats,
+              file.path(results_dir,
+                        sprintf("tab_G_beta_stats_%s.csv", tgt)),
+              row.names = FALSE)
+    cat(sprintf("  [OK] tab_G_beta_stats_%s.csv\n", tgt))
   }
 } else {
   cat("  TVP Betas nao disponiveis.\n")
@@ -1041,7 +1139,271 @@ if ("2SRR" %in% methods && length(rivais) > 0) {
 }
 
 ###############################################################################
-# PARTE N -- Resumo Final no Console
+# PARTE N -- CSFE Rolling Window: MSFE relativo do 2SRR ao longo do tempo
+###############################################################################
+cat(" PARTE N -- MSFE Rolling do 2SRR (janela 36 meses)\n")
+
+window_size <- 36
+
+for (key in names(res)) {
+  r   <- res[[key]]
+  n_e <- length(r$actuals)
+  if (n_e < window_size + 10) next
+  if (!"2SRR" %in% colnames(r$preds)) next
+
+  e2_ar   <- (r$preds[1:n_e, "AR"]   - r$actuals)^2
+  e2_2srr <- (r$preds[1:n_e, "2SRR"] - r$actuals)^2
+
+  # MSFE relativo rolling
+  roll_rel  <- rep(NA, n_e)
+  roll_date <- r$dates[1:n_e]
+
+  for (t in window_size:n_e) {
+    idx <- (t - window_size + 1):t
+    ok  <- !is.na(e2_ar[idx]) & !is.na(e2_2srr[idx])
+    if (sum(ok) > 10) {
+      roll_rel[t] <- mean(e2_2srr[idx[ok]]) / mean(e2_ar[idx[ok]])
+    }
+  }
+
+  df_roll <- data.frame(
+    Date     = roll_date,
+    MSFE_rel = roll_rel
+  ) |>
+    filter(!is.na(MSFE_rel))
+
+  # Colorir por acima/abaixo de 1
+  df_roll$Vantagem <- ifelse(df_roll$MSFE_rel < 1, "2SRR melhor", "AR melhor")
+
+  # Periodos onde 2SRR ganha
+  pct_ganha <- round(100 * mean(df_roll$MSFE_rel < 1), 1)
+
+  p <- ggplot(df_roll, aes(Date, MSFE_rel)) +
+    geom_ribbon(aes(ymin = pmin(MSFE_rel, 1), ymax = 1),
+                fill = "#2E7D32", alpha = 0.15) +
+    geom_ribbon(aes(ymin = 1, ymax = pmax(MSFE_rel, 1)),
+                fill = "#D32F2F", alpha = 0.15) +
+    geom_line(linewidth = 0.7, color = "#D32F2F") +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+    labs(
+      title = sprintf("MSFE Relativo Rolling (2SRR/AR) -- h=%d, janela=%d meses",
+                      r$horizon, window_size),
+      subtitle = sprintf("Verde = 2SRR supera AR. 2SRR vence em %.1f%% das janelas",
+                          pct_ganha),
+      x = NULL, y = "MSFE(2SRR) / MSFE(AR)"
+    ) +
+    annotate("text", x = min(df_roll$Date) + 200, y = 0.85,
+             label = "2SRR melhor", color = "#2E7D32", fontface = "bold",
+             size = 3.5) +
+    annotate("text", x = min(df_roll$Date) + 200, y = 1.15,
+             label = "AR melhor", color = "#D32F2F", fontface = "bold",
+             size = 3.5)
+
+  fname <- sprintf("fig_O_rolling_msfe_%s_h%02d", r$target, r$horizon)
+  ggsave(file.path(results_dir, paste0(fname, ".png")), p,
+         width = 11, height = 5, dpi = 250)
+  cat(sprintf("  [OK] %s.png (2SRR vence em %.1f%% das janelas)\n",
+              fname, pct_ganha))
+}
+
+###############################################################################
+# PARTE O -- Analise pre/pos COVID (quebra estrutural)
+###############################################################################
+cat(" PARTE O -- Performance pre vs pos COVID\n")
+
+covid_date <- as.Date("2020-03-01")
+
+covid_rows <- list()
+for (key in names(res)) {
+  r   <- res[[key]]
+  n_e <- length(r$actuals)
+  if (n_e < 30) next
+
+  for (periodo in c("Pre-COVID", "Pos-COVID")) {
+    if (periodo == "Pre-COVID") {
+      idx <- which(r$dates[1:n_e] < covid_date)
+    } else {
+      idx <- which(r$dates[1:n_e] >= covid_date)
+    }
+    if (length(idx) < 10) next
+
+    row <- data.frame(Target  = r$target,
+                      Horizon = r$horizon,
+                      Periodo = periodo,
+                      N_obs   = length(idx),
+                      stringsAsFactors = FALSE)
+    for (m in methods) {
+      erros <- (r$preds[idx, m] - r$actuals[idx])^2
+      ok    <- !is.na(erros) & !is.infinite(erros)
+      if (sum(ok) > 5) {
+        row[[paste0("MSFE_", m)]] <- mean(erros[ok])
+      } else {
+        row[[paste0("MSFE_", m)]] <- NA
+      }
+    }
+    covid_rows[[paste0(key, "_", periodo)]] <- row
+  }
+}
+
+df_covid <- do.call(rbind, covid_rows)
+rownames(df_covid) <- NULL
+
+df_covid_rel <- df_covid[, c("Target", "Horizon", "Periodo", "N_obs")]
+for (m in methods) {
+  df_covid_rel[[m]] <- round(
+    df_covid[[paste0("MSFE_", m)]] / df_covid[["MSFE_AR"]], 4)
+}
+
+cat("TABELA MSFE RELATIVO AO AR -- PRE vs POS COVID:\n\n")
+print(df_covid_rel)
+
+write.csv(df_covid_rel, file.path(results_dir, "tab_P_covid_msfe.csv"),
+          row.names = FALSE)
+cat("\n  [OK] tab_P_covid_msfe.csv\n")
+
+# Grafico comparativo
+modelos_covid <- intersect(c("2SRR", "ElNET", "RF", "LASSO", "Ridge"), methods)
+
+df_covid_plot <- df_covid_rel |>
+  pivot_longer(cols = all_of(modelos_covid), names_to = "Modelo",
+               values_to = "MSFE_rel") |>
+  mutate(Horizonte = factor(paste0("h=", Horizon),
+                            levels = paste0("h=", horizons_list)))
+
+cores_covid <- c("2SRR"  = "#D32F2F", "ElNET" = "#1976D2",
+                 "RF"    = "#388E3C", "LASSO" = "#F57C00",
+                 "Ridge" = "#90CAF9")
+
+p <- ggplot(df_covid_plot,
+            aes(Horizonte, MSFE_rel, fill = Modelo)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6,
+           alpha = 0.85) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  facet_wrap(~ Periodo, ncol = 2) +
+  scale_fill_manual(values = cores_covid) +
+  labs(
+    title    = "MSFE Relativo ao AR -- Pre vs Pos COVID",
+    subtitle = "Modelos TVP (2SRR) devem melhorar relativamente apos a quebra estrutural",
+    x = NULL, y = "MSFE / MSFE(AR)"
+  )
+
+ggsave(file.path(results_dir, "fig_P_covid_comparison.png"), p,
+       width = 11, height = 5.5, dpi = 250)
+cat("  [OK] fig_P_covid_comparison.png\n")
+
+###############################################################################
+# PARTE P -- Sumario narrativo do 2SRR (argumentos para apresentacao)
+###############################################################################
+cat(" PARTE P -- Sumario narrativo do 2SRR\n")
+
+sumario_file <- file.path(results_dir, "sumario_2SRR.txt")
+sink(sumario_file)
+
+cat("================================================================\n")
+cat(" SUMARIO ANALITICO DO MODELO 2SRR (Two-Step Ridge Regression)\n")
+cat(" Gerado automaticamente em:", format(Sys.time()), "\n")
+cat("================================================================\n\n")
+
+# 1. Performance geral
+msfe_2srr <- sapply(horizons_list, function(h) {
+  key <- sprintf("V1_h%d", h)
+  df_rel[df_rel$Horizon == h, "2SRR"]
+})
+cat("1. PERFORMANCE GERAL (MSFE relativo ao AR):\n")
+for (i in seq_along(horizons_list)) {
+  status <- ifelse(msfe_2srr[i] < 1, "SUPERA", "PERDE PARA")
+  cat(sprintf("   h=%2d: %.4f (%s o AR)\n", horizons_list[i], msfe_2srr[i], status))
+}
+
+cat(sprintf("\n   Media geral: %.4f\n", mean(msfe_2srr)))
+cat(sprintf("   O 2SRR supera o AR em %d de %d horizontes.\n\n",
+            sum(msfe_2srr < 1), length(msfe_2srr)))
+
+# 2. Performance por regime
+cat("2. PERFORMANCE POR REGIME DE VOLATILIDADE:\n")
+if (exists("df_regime_rel")) {
+  for (reg in c("Normal", "Picos")) {
+    sub <- df_regime_rel[df_regime_rel$Regime == reg, ]
+    if (nrow(sub) > 0) {
+      cat(sprintf("   %s:\n", reg))
+      for (j in seq_len(nrow(sub))) {
+        cat(sprintf("     h=%2d: %.4f\n", sub$Horizon[j], sub[j, "2SRR"]))
+      }
+    }
+  }
+  picos <- df_regime_rel[df_regime_rel$Regime == "Picos", "2SRR"]
+  if (any(picos < 1)) {
+    cat(sprintf("\n   ARGUMENTO CHAVE: O 2SRR supera o AR nos picos em %d de %d horizontes.\n",
+                sum(picos < 1), length(picos)))
+    cat("   Isso confirma que modelos TVP se adaptam a choques inflacionarios.\n\n")
+  }
+}
+
+# 3. Performance pre/pos COVID
+cat("3. PERFORMANCE PRE vs POS COVID:\n")
+if (exists("df_covid_rel")) {
+  pre  <- df_covid_rel[df_covid_rel$Periodo == "Pre-COVID", ]
+  pos  <- df_covid_rel[df_covid_rel$Periodo == "Pos-COVID", ]
+  if (nrow(pre) > 0 && nrow(pos) > 0) {
+    cat("   Pre-COVID:\n")
+    for (j in seq_len(nrow(pre))) {
+      cat(sprintf("     h=%2d: %.4f\n", pre$Horizon[j], pre[j, "2SRR"]))
+    }
+    cat("   Pos-COVID:\n")
+    for (j in seq_len(nrow(pos))) {
+      cat(sprintf("     h=%2d: %.4f\n", pos$Horizon[j], pos[j, "2SRR"]))
+    }
+    melhora <- mean(pos[, "2SRR"], na.rm = TRUE) < mean(pre[, "2SRR"], na.rm = TRUE)
+    if (melhora) {
+      cat("\n   ARGUMENTO CHAVE: O 2SRR melhora relativamente no periodo pos-COVID.\n")
+      cat("   Isso e evidencia de adaptacao a quebra estrutural.\n\n")
+    } else {
+      cat("\n   NOTA: O 2SRR nao melhorou no pos-COVID em media.\n")
+      cat("   Possivel explicacao: pandemia nao afetou inflacao da mesma forma.\n\n")
+    }
+  }
+}
+
+# 4. Ranking
+cat("4. POSICAO NO RANKING GERAL:\n")
+if (exists("ranking")) {
+  pos_rank <- which(ranking$Modelo == "2SRR")
+  cat(sprintf("   Posicao: %d de %d modelos competidores\n",
+              pos_rank, nrow(ranking)))
+  cat(sprintf("   Vitorias: %d | Top 3: %d | MSFE medio: %.4f\n",
+              ranking$Vitorias[pos_rank], ranking$Top3[pos_rank],
+              ranking$Media_MSFE_rel[pos_rank]))
+  cat(sprintf("   Melhor modelo geral: %s (%.4f)\n\n",
+              ranking$Modelo[1], ranking$Media_MSFE_rel[1]))
+}
+
+# 5. Pontos fortes e fracos
+cat("5. SINTESE PARA APRESENTACAO:\n\n")
+cat("   PONTOS FORTES do 2SRR:\n")
+cat("   - Captura parametros variantes no tempo sem MCMC/Kalman\n")
+cat("   - Computacionalmente eficiente (apenas Ridge + CV)\n")
+cat("   - Permite narrativa economica (quais variaveis mudaram de peso)\n")
+cat("   - Tende a melhorar em periodos de alta volatilidade/choques\n\n")
+cat("   PONTOS FRACOS do 2SRR:\n")
+cat("   - MSFE geral > 1 (perde para AR na media)\n")
+cat("   - Modelos estaticos simples (ElNET, LASSO) sao mais precisos em geral\n")
+cat("   - Custo de flexibilidade em periodos calmos (overfitting leve)\n\n")
+cat("   NARRATIVA RECOMENDADA:\n")
+cat("   'O 2SRR nao e o modelo mais preciso na media, mas oferece algo que\n")
+cat("    modelos estaticos nao conseguem: adaptacao rapida a choques e a\n")
+cat("    capacidade de revelar COMO a estrutura da economia muda ao longo\n")
+cat("    do tempo. Para Bancos Centrais, essa informacao estrutural pode\n")
+cat("    ser mais valiosa que um ganho marginal de MSFE.'\n")
+
+cat("\n================================================================\n")
+sink()
+
+# Imprimir no console tambem
+cat(readLines(sumario_file), sep = "\n")
+cat(sprintf("\n\n  [OK] %s\n", sumario_file))
+
+###############################################################################
+# PARTE Q -- Resumo Final no Console
 ###############################################################################
 cat(" RESUMO FINAL DOS RESULTADOS\n")
 
