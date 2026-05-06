@@ -3,7 +3,7 @@ set.seed(2024)
 
 cat("
 ==============================================================
- 10_results_analysis.R - v0.0.4
+ 10_results_analysis.R - v0.0.5
 ==============================================================
 \n")
 
@@ -615,46 +615,47 @@ if (has_mcs) {
     n_e <- length(r$actuals)
     if (n_e < 20) next
 
-    loss_mat <- matrix(NA, n_e, length(methods))
+    # Montar matriz de perdas
+    loss_mat <- matrix(NA_real_, n_e, length(methods))
     colnames(loss_mat) <- methods
     for (m in methods) {
       loss_mat[, m] <- (r$preds[1:n_e, m] - r$actuals)^2
     }
 
-    # Substituir Inf e NaN por NA, depois remover linhas e colunas problematicas
-    loss_mat[is.infinite(loss_mat)] <- NA
-    loss_mat[is.nan(loss_mat)]      <- NA
+    # Limpar Inf e NaN
+    loss_mat[is.infinite(loss_mat)] <- NA_real_
+    loss_mat[is.nan(loss_mat)]      <- NA_real_
 
-    # Remover colunas (modelos) que tenham mais de 10% de NA
-    pct_na <- colMeans(is.na(loss_mat))
+    # Remover colunas com muitos NA (mais de 10%)
+    pct_na  <- colMeans(is.na(loss_mat))
     cols_ok <- names(which(pct_na < 0.10))
     if (length(cols_ok) < 3) next
     loss_mat <- loss_mat[, cols_ok, drop = FALSE]
 
-    # Remover linhas com qualquer NA restante
-    ok <- complete.cases(loss_mat)
+    # Remover linhas incompletas
+    ok             <- complete.cases(loss_mat)
     loss_mat_clean <- loss_mat[ok, , drop = FALSE]
     if (nrow(loss_mat_clean) < 30) next
 
-    # Garantir que e numerico
+    # Garantir tipo double
     storage.mode(loss_mat_clean) <- "double"
 
     tryCatch({
-      mcs_out <- MCSprocedure(as.data.frame(loss_mat_clean),
-                              alpha = 0.15, B = 5000,
-                              statistic = "Tmax")
+      mcs_out   <- MCSprocedure(loss_mat_clean,
+                                alpha = 0.15, B = 5000,
+                                statistic = "Tmax")
       surviving <- rownames(mcs_out@show)
-      in_mcs <- ifelse("2SRR" %in% surviving, " << 2SRR INCLUIDO", "")
+      in_mcs    <- ifelse("2SRR" %in% surviving, " << 2SRR INCLUIDO", "")
 
       cat(sprintf("  %s h=%d: MCS = {%s}%s\n",
                   r$target, r$horizon,
                   paste(surviving, collapse = ", "), in_mcs))
 
       mcs_results[[key]] <- data.frame(
-        Target     = r$target,
-        Horizon    = r$horizon,
-        MCS_Models = paste(surviving, collapse = ", "),
-        N_modelos  = length(surviving),
+        Target      = r$target,
+        Horizon     = r$horizon,
+        MCS_Models  = paste(surviving, collapse = ", "),
+        N_modelos   = length(surviving),
         Inclui_2SRR = "2SRR" %in% surviving
       )
     }, error = function(e) {
