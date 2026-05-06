@@ -1,0 +1,19 @@
+\begin{table}[ht]
+\centering
+\caption{MSFE relativo ao AR --- Dados Americanos}
+\label{tab:msfe_relative}
+\begin{tabular}{llcccccccccccc}
+\hline\hline
+Target & h & AR & Ridge & LASSO & AdaLASSO & ElNET & RF & 2SRR & Factor & Bagging & CSR & rw & AR_BIC \\
+\hline
+INFLATION & 1 & 1.000 & 1.000 & 0.846$^{***}$ & 0.907 & \textbf{0.845}$^{***}$ & 0.949 & 1.087 & 0.954 & 1.060 & 0.877$^{***}$ & 1.222$^{*}$ & 1.012 \\
+INFLATION & 3 & 1.000 & 1.018 & 0.901$^{*}$ & 0.974 & \textbf{0.892}$^{*}$ & 0.913 & 1.032 & 1.152 & 1.285 & 0.940 & 1.600$^{***}$ & 1.010 \\
+INFLATION & 6 & 1.000 & 1.023 & 0.954 & 1.013 & 0.957 & \textbf{0.902}$^{*}$ & 1.066 & 1.108 & 1.460$^{*}$ & 1.052 & 1.589$^{**}$ & 1.009 \\
+INFLATION & 12 & 1.000 & 1.169 & 0.992 & 1.065 & \textbf{0.969} & 1.121 & 1.087 & 1.230$^{**}$ & 1.914 & 1.115 & 1.872$^{***}$ & 1.013 \\
+\hline\hline
+\end{tabular}
+\begin{tablenotes}
+\small
+\item Nota: Valores representam MSFE relativo ao AR. Valores $< 1$ indicam modelo superior ao benchmark. Negrito indica melhor modelo. $^{***}$, $^{**}$, $^{*}$ indicam significancia no teste de Diebold-Mariano a 1\%, 5\% e 10\%.
+\end{tablenotes}
+\end{table}

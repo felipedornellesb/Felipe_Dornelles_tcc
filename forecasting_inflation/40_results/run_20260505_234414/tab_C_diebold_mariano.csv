@@ -1,0 +1,5 @@
+"Target","Horizon","DM_pval_2SRR","DM_stars_2SRR","DM_pval_AdaElNET","DM_stars_AdaElNET","DM_pval_AdaLASSO","DM_stars_AdaLASSO","DM_pval_AR_BIC","DM_stars_AR_BIC","DM_pval_Bagging","DM_stars_Bagging","DM_pval_CSR","DM_stars_CSR","DM_pval_ElNET","DM_stars_ElNET","DM_pval_Factor","DM_stars_Factor","DM_pval_LASSO","DM_stars_LASSO","DM_pval_RF","DM_stars_RF","DM_pval_Ridge","DM_stars_Ridge","DM_pval_rw","DM_stars_rw","DM_pval_T.Factor","DM_stars_T.Factor"
+"INFLATION",1,0.4679,"",0.4263,"",0.1154,"",0.1261,"",0.6319,"",3e-04,"***",9e-04,"***",0.5872,"",0.0037,"***",0.2344,"",0.9954,"",0.0772,"*",0.2357,""
+"INFLATION",3,0.7796,"",0.9089,"",0.7442,"",0.2552,"",0.3997,"",0.2428,"",0.0969,"*",0.4205,"",0.0985,"*",0.2754,"",0.8754,"",0.0022,"***",0.9257,""
+"INFLATION",6,0.5128,"",0.8844,"",0.7322,"",0.2074,"",0.088,"*",0.5973,"",0.2925,"",0.3081,"",0.2643,"",0.077,"*",0.7817,"",0.0115,"**",0.7421,""
+"INFLATION",12,0.4146,"",0.3063,"",0.1358,"",0.1001,"",0.1178,"",0.3136,"",0.5179,"",0.0457,"**",0.8612,"",0.3186,"",0.2658,"",4e-04,"***",0.0379,"**"
