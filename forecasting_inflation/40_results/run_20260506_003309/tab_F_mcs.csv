@@ -1,0 +1,5 @@
+"Target","Horizon","MCS_Models","N_modelos","Inclui_2SRR"
+"INFLATION",1,"rw, 2SRR, AdaElNET, AdaLASSO, AR, AR_BIC, Bagging, CSR, Factor, RF, Ridge, T.Factor, LASSO, ElNET",14,TRUE
+"INFLATION",3,"rw, Factor, 2SRR, Bagging, AdaElNET, AdaLASSO, AR, AR_BIC, CSR, LASSO, RF, Ridge, T.Factor, ElNET",14,TRUE
+"INFLATION",6,"rw, Bagging, Factor, 2SRR, AdaElNET, AdaLASSO, AR, AR_BIC, CSR, ElNET, LASSO, Ridge, T.Factor, RF",14,TRUE
+"INFLATION",12,"rw, Bagging, Factor, 2SRR, AdaElNET, AdaLASSO, AR_BIC, CSR, RF, Ridge, T.Factor, AR, LASSO, ElNET",14,TRUE
