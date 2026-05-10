@@ -12,13 +12,13 @@
 # ============================================================
 
 rm(list = ls())
-setwd("~/TCC/tcc/forecasting_inflation")
+setwd("~/tcc/Felipe_Dornelles_tcc/forecasting_inflation")
 
 library(ggplot2)
 library(reshape2)
 library(gridExtra)
 
-dir.create("results/figures", showWarnings = FALSE, recursive = TRUE)
+dir.create("40_results/betas_descriptive", showWarnings = FALSE, recursive = TRUE)
 
 cat("  ANALISE DESCRITIVA DOS BETAS\n")
 
@@ -168,9 +168,9 @@ if (!is.null(first_2srr) && !is.null(first_ridge)) {
       theme_minimal() +
       theme(strip.text = element_text(face = "bold"))
     
-    ggsave("results/figures/betas_primeira_janela_h01.pdf",
+    ggsave("40_results/betas_descriptive/betas_primeira_janela_h01.png",
            p_traj, width = 12, height = 10)
-    cat("\n  Grafico salvo: results/figures/betas_primeira_janela_h01.pdf\n")
+    cat("\n  Grafico salvo: 40_results/betas_descriptive/betas_primeira_janela_h01.png\n")
     
     # A3: Barplot comparativo Ridge vs TVP (primeira janela)
     
@@ -190,9 +190,9 @@ if (!is.null(first_2srr) && !is.null(first_ridge)) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
             legend.position = "top")
     
-    ggsave("results/figures/betas_barplot_primeira_janela_h01.pdf",
+    ggsave("40_results/betas_descriptive/betas_barplot_primeira_janela_h01.png",
            p_bar, width = 14, height = 6)
-    cat("  Grafico salvo: results/figures/betas_barplot_primeira_janela_h01.pdf\n")
+    cat("  Grafico salvo: 40_results/betas_descriptive/betas_barplot_primeira_janela_h01.png\n")
     
   }
 } else {
@@ -275,13 +275,13 @@ if (length(valid_2srr) > 5 && length(valid_ridge) > 5) {
                         c(plots_list, ncol = 2,
                           top = "Evolucao OOS: Ultimo beta 2SRR vs Ridge (h=1)"))
   
-  ggsave("results/figures/betas_oos_evolution_h01.pdf",
+  ggsave("40_results/betas_descriptive/betas_oos_evolution_h01.png",
          p_combined, width = 14, height = 12)
-  cat("  Grafico salvo: results/figures/betas_oos_evolution_h01.pdf\n")
+  cat("  Grafico salvo: 40_results/betas_descriptive/betas_oos_evolution_h01.png\n")
   
   # B2: Salva tabela comparativa para artigo
-  write.csv(tvp_df, "results/betas_tvp_last_oos_h01.csv", row.names = FALSE)
-  write.csv(ridge_df, "results/betas_ridge_oos_h01.csv", row.names = FALSE)
+  write.csv(tvp_df, "40_results/betas_descriptive/betas_tvp_last_oos_h01.csv", row.names = FALSE)
+  write.csv(ridge_df, "40_results/betas_descriptive/betas_ridge_oos_h01.csv", row.names = FALSE)
   cat("  CSVs salvos: betas_tvp_last_oos_h01.csv e betas_ridge_oos_h01.csv\n")
 }
 
@@ -409,9 +409,9 @@ if (exists("tvp_df") && exists("ridge_df")) {
     theme_minimal() +
     theme(legend.position = "bottom")
   
-  ggsave("results/figures/parcimonia_hhi_h01.pdf",
+  ggsave("40_results/betas_descriptive/parcimonia_hhi_h01.png",
          p_hhi, width = 12, height = 5)
-  cat("\n  Grafico salvo: results/figures/parcimonia_hhi_h01.pdf\n")
+  cat("\n  Grafico salvo: 40_results/betas_descriptive/parcimonia_hhi_h01.png\n")
   
   # C5: Ratio de magnitude |beta_2SRR| / |beta_Ridge|
   cat("\n  C4. Shrinkage relativo (media OOS):\n")
@@ -444,7 +444,7 @@ if (exists("tvp_df") && exists("ridge_df")) {
     cat("    >>> Shrinkage similar entre os modelos\n")
   }
   
-  write.csv(shrink_df, "results/parcimonia_shrinkage_h01.csv", row.names = FALSE)
+  write.csv(shrink_df, "40_results/parcimonia_shrinkage_h01.csv", row.names = FALSE)
 }
 
 # PARTE D: RESUMO PARA O ARTIGO
@@ -452,10 +452,10 @@ if (exists("tvp_df") && exists("ridge_df")) {
 cat("  RESUMO: Outputs para o artigo\n")
 
 cat("  Figuras geradas:\n")
-cat("    1. betas_primeira_janela_h01.pdf — Trajetoria TVP vs Ridge (1a janela)\n")
-cat("    2. betas_barplot_primeira_janela_h01.pdf — Barplot comparativo\n")
-cat("    3. betas_oos_evolution_h01.pdf — Evolucao OOS: ultimo beta TVP vs Ridge\n")
-cat("    4. parcimonia_hhi_h01.pdf — Concentracao de informacao ao longo do tempo\n")
+cat("    1. betas_primeira_janela_h01.png — Trajetoria TVP vs Ridge (1a janela)\n")
+cat("    2. betas_barplot_primeira_janela_h01.png — Barplot comparativo\n")
+cat("    3. betas_oos_evolution_h01.png — Evolucao OOS: ultimo beta TVP vs Ridge\n")
+cat("    4. parcimonia_hhi_h01.png — Concentracao de informacao ao longo do tempo\n")
 cat("\n")
 cat("  Tabelas geradas:\n")
 cat("    1. betas_tvp_last_oos_h01.csv — Serie temporal dos ultimos betas TVP\n")
