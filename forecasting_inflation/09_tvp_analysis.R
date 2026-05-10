@@ -161,4 +161,7 @@ if (length(all_results) > 0) {
   cat("  Graficos salvos em results/figures/\n")
 }
 
+print(p1)
+print(p2)
+
 cat("  09_tvp_analysis.R --- COMPLETO\n")
