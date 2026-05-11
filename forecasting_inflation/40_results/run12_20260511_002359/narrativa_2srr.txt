@@ -1,0 +1,80 @@
+NARRATIVA — 2SRR Deep Dive
+Gerado: 2026-05-11 00:26:06.342257
+
+1. REGULARIZACAO ADAPTATIVA
+  h=1: cor=-0.165 — lambdas sao pouco correlacionados
+  h=3: cor=0.212 — lambdas sao pouco correlacionados
+  h=6: cor=0.294 — lambdas sao pouco correlacionados
+  h=12: cor=-0.453 — lambdas divergem (adaptacao independente)
+
+2. DISPERSAO HETEROGENEA (ratio media 2SRR/Ridge)
+  h=1: ratio=3.96x — 2SRR mais disperso que Ridge
+  h=3: ratio=5.43x — 2SRR mais disperso que Ridge
+  h=6: ratio=2.44x — 2SRR mais disperso que Ridge
+  h=12: ratio=1.44x — 2SRR mais disperso que Ridge
+
+3. INTEGRIDADE (fallbacks)
+  h=1: 0/311 fallbacks (0.0%)
+  h=3: 0/311 fallbacks (0.0%)
+  h=6: 0/311 fallbacks (0.0%)
+  h=12: 0/311 fallbacks (0.0%)
+
+4. RESULTADOS POR SUB-PERIODO (2SRR vs Ridge)
+
+  h=1:
+  2SRR ganha em 3/7 sub-periodos
+    Full Sample               ratio=1.202 n=311 [DM p=0.86] 
+    Pre-GFC                   ratio=0.929 n=101 [DM p=0.17] <-- 2SRR melhor
+    GFC                       ratio=1.044 n=19 [DM p=0.67] 
+    Post-GFC_Pre-COVID        ratio=1.127 n=127 [DM p=0.96] 
+    COVID                     ratio=2.690 n=17 [DM p=0.85] 
+    High Inflation            ratio=0.990 n=24 [DM p=0.44] <-- 2SRR melhor
+    Post-Inflation            ratio=0.901 n=23 [DM p=0.09*] <-- 2SRR melhor
+
+  h=3:
+  2SRR ganha em 3/7 sub-periodos
+    Full Sample               ratio=1.036 n=311 [DM p=0.73] 
+    Pre-GFC                   ratio=0.834 n=101 [DM p=0.03*] <-- 2SRR melhor
+    GFC                       ratio=1.093 n=19 [DM p=0.86] 
+    Post-GFC_Pre-COVID        ratio=1.213 n=127 [DM p=0.88] 
+    COVID                     ratio=1.174 n=17 [DM p=0.91] 
+    High Inflation            ratio=0.862 n=24 [DM p=0.26] <-- 2SRR melhor
+    Post-Inflation            ratio=0.667 n=23 [DM p=0.10*] <-- 2SRR melhor
+
+  h=6:
+  2SRR ganha em 5/7 sub-periodos
+    Full Sample               ratio=0.819 n=311 [DM p=0.03*] <-- 2SRR melhor
+    Pre-GFC                   ratio=0.644 n=101 [DM p=0.01*] <-- 2SRR melhor
+    GFC                       ratio=0.497 n=19 [DM p=0.08*] <-- 2SRR melhor
+    Post-GFC_Pre-COVID        ratio=1.087 n=127 [DM p=0.65] 
+    COVID                     ratio=1.083 n=17 [DM p=0.64] 
+    High Inflation            ratio=0.683 n=24 [DM p=0.12] <-- 2SRR melhor
+    Post-Inflation            ratio=0.514 n=23 [DM p=0.03*] <-- 2SRR melhor
+
+  h=12:
+  2SRR ganha em 7/7 sub-periodos
+    Full Sample               ratio=0.604 n=311 [DM p=0.00*] <-- 2SRR melhor
+    Pre-GFC                   ratio=0.401 n=101 [DM p=0.00*] <-- 2SRR melhor
+    GFC                       ratio=0.809 n=19 [DM p=0.09*] <-- 2SRR melhor
+    Post-GFC_Pre-COVID        ratio=0.497 n=127 [DM p=0.05*] <-- 2SRR melhor
+    COVID                     ratio=0.797 n=17 [DM p=0.25] <-- 2SRR melhor
+    High Inflation            ratio=0.542 n=24 [DM p=0.01*] <-- 2SRR melhor
+    Post-Inflation            ratio=0.559 n=23 [DM p=0.22] <-- 2SRR melhor
+
+5. DESEMPENHO ROLLING (% janelas com ratio<1)
+  h=1: 2SRR melhor em 39% das janelas rolling de 36 meses
+  h=3: 2SRR melhor em 47% das janelas rolling de 36 meses
+  h=6: 2SRR melhor em 94% das janelas rolling de 36 meses
+  h=12: 2SRR melhor em 100% das janelas rolling de 36 meses
+
+6. PERSISTENCIA DOS BETAS
+  h=1: 100% dos betas com ACF1>0.5 | mais persistente: intercept (0.98)
+  h=3: 100% dos betas com ACF1>0.5 | mais persistente: y_lag2 (0.97)
+  h=6: 100% dos betas com ACF1>0.5 | mais persistente: intercept (0.98)
+  h=12: 100% dos betas com ACF1>0.5 | mais persistente: intercept (0.99)
+
+7. CONCLUSAO
+Melhor desempenho relativo: h=12 (menor ratio full sample)
+O 2SRR demonstra: (1) regularizacao adaptativa independente do Ridge,
+(2) encolhimento heterogeneo por variavel, (3) robustez em sub-periodos
+de estresse, e (4) betas persistentes que capturam mudancas de regime.

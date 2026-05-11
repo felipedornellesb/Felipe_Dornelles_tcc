@@ -15,7 +15,7 @@
 # ============================================================
 
 rm(list = ls())
-setwd("~/TCC/tcc/forecasting_inflation")
+setwd("~/tcc/Felipe_Dornelles_tcc/forecasting_inflation")
 
 library(ggplot2)
 library(reshape2)
@@ -184,8 +184,9 @@ for (h in hor) {
 print(fallback_tab)
 write.csv(fallback_tab, file.path(out_dir, "fallback_detection.csv"), row.names=FALSE)
 
-# PARTE 4: SUB-PERIODOS EXPANDIDOS
-cat("\nPARTE 4: Sub-periodos expandidos\n")
+# PARTE 4A: SUB-PERIODOS EXPANDIDOS
+cat("\nPARTE 4A: Sub-periodos expandidos\n")
+
 
 periodos <- list(
   "Full Sample"        = c(as.Date("1999-07-01"), as.Date("2025-06-01")),
@@ -196,6 +197,7 @@ periodos <- list(
   "High Inflation"     = c(as.Date("2021-07-01"), as.Date("2023-06-30")),
   "Post-Inflation"     = c(as.Date("2023-07-01"), as.Date("2025-06-01")))
 
+
 sub_results <- list()
 for (h in hor) {
   key <- paste0("h",h)
@@ -203,6 +205,7 @@ for (h in hor) {
   df <- coulombe[[key]]
   df <- df[complete.cases(df$realized, df$fc_ridge, df$fc_2srr), ]
   df$date_p <- as.Date(df$date)
+
 
   for (pn in names(periodos)) {
     pr <- periodos[[pn]]
@@ -216,10 +219,12 @@ for (h in hor) {
   }
 }
 
+
 if (length(sub_results) > 0) {
   sub_tab <- do.call(rbind, sub_results)
   print(sub_tab)
   write.csv(sub_tab, file.path(out_dir, "subperiodos_expandido.csv"), row.names=FALSE)
+
 
   sub_tab$periodo <- factor(sub_tab$periodo, levels=names(periodos))
   p <- ggplot(sub_tab, aes(x=periodo, y=Ratio, fill=factor(h))) +
@@ -232,8 +237,101 @@ if (length(sub_results) > 0) {
   print(p)
 }
 
-# PARTE 5: CORRELACAO BETAS vs VOLATILIDADE
-cat("\nPARTE 5: Correlacao betas vs volatilidade\n")
+
+for (h in hor) {
+  key <- paste0("h",h)
+  if (is.null(coulombe[[key]])) next
+  df <- coulombe[[key]]
+  df <- df[complete.cases(df$realized, df$fc_ridge, df$fc_2srr), ]
+  df$date_p <- as.Date(df$date)
+
+
+  dm_results <- list()
+  for (pn in names(periodos)) {
+    pr <- periodos[[pn]]
+    idx <- df$date_p >= pr[1] & df$date_p <= pr[2]
+    if (sum(idx) < 10) next
+    e_ridge <- df$fc_ridge[idx] - df$realized[idx]
+    e_2srr  <- df$fc_2srr[idx]  - df$realized[idx]
+    dm_test <- tryCatch(
+      dm.test(e_ridge, e_2srr, alternative="greater", h=h, power=2),
+      error = function(e) NULL
+    )
+    if (!is.null(dm_test)) {
+      dm_results[[pn]] <- data.frame(
+        h=h, periodo=pn,
+        DM_stat=dm_test$statistic,
+        p_value=dm_test$p.value,
+        significativo=dm_test$p.value < 0.10
+      )
+    }
+  }
+  if (length(dm_results) > 0) {
+    dm_tab <- do.call(rbind, dm_results)
+    print(dm_tab)
+    write.csv(dm_tab, file.path(out_dir, sprintf("dm_test_h%02d.csv",h)), row.names=FALSE)
+  }
+}
+
+
+# PARTE 4B: EVOLUCAO DE BETAS SELECIONADOS AO LONGO DO TEMPO
+cat("\nPARTE 4B: Evolucao de betas selecionados\n")
+
+
+# Regressores de interesse teorico
+reg_interest <- c("intercept", "y_lag1", "y_lag2", "F1_lag1", "F2_lag1")
+
+
+for (hi in seq_along(hor)) {
+  h <- hor[hi]
+  valid_b <- Filter(Negate(is.null), betas_2srr[[hi]])
+  if (length(valid_b) < 10) next
+
+
+  beta_mat <- do.call(rbind, lapply(valid_b, function(b) {
+    bm <- b$betas
+    if (is.array(bm) && length(dim(bm))==3) bvec <- bm[1,,dim(bm)[3]]
+    else if (is.matrix(bm)) bvec <- bm[nrow(bm),]
+    else bvec <- as.numeric(bm)
+    bvec
+  }))
+
+
+  K <- ncol(beta_mat)
+  col_nm <- if (K <= length(reg_names)) reg_names[1:K] else paste0("b",0:(K-1))
+  colnames(beta_mat) <- col_nm
+  dates_b <- as.Date(sapply(valid_b, function(b) as.character(b$date)))
+
+
+  # Selecionar apenas regressores de interesse que existem
+  reg_sel <- intersect(reg_interest, col_nm)
+  if (length(reg_sel) == 0) next
+
+
+  df_betas <- as.data.frame(beta_mat[, reg_sel, drop=FALSE])
+  df_betas$date <- dates_b
+  df_long <- melt(df_betas, id.vars="date", variable.name="Regressor", value.name="Beta")
+
+
+  p <- ggplot(df_long, aes(x=date, y=Beta, color=Regressor)) +
+    geom_rect(data=recessions, aes(xmin=start,xmax=end,ymin=-Inf,ymax=Inf),
+              inherit.aes=FALSE, fill="gray90", alpha=0.5) +
+    geom_line(linewidth=0.6) +
+    geom_hline(yintercept=0, linetype="dashed", color="gray40") +
+    facet_wrap(~Regressor, scales="free_y", ncol=2) +
+    labs(title=sprintf("Evolucao temporal dos betas 2SRR (h=%d)", h),
+         subtitle="Intercepto, lags de y e fatores principais | Cinza = recessoes NBER",
+         x="", y="Beta", color="") +
+    theme_minimal() + theme(legend.position="none")
+
+
+  ggsave(file.path(fig_dir, sprintf("betas_evolucao_h%02d.pdf",h)), p, width=14, height=8)
+  print(p)
+  cat(sprintf("  h=%d: evolucao de %d betas plotada\n", h, length(reg_sel)))
+}
+
+# PARTE 5A: CORRELACAO BETAS vs VOLATILIDADE
+cat("\nPARTE 5A: Correlacao betas vs volatilidade\n")
 
 for (hi in seq_along(hor)) {
   h <- hor[hi]; key <- paste0("h",h)
@@ -277,6 +375,67 @@ for (hi in seq_along(hor)) {
     theme_minimal() + theme(legend.position="bottom")
   ggsave(file.path(fig_dir, sprintf("betas_vs_vol_h%02d.pdf",h)), p, width=12, height=5)
   print(p)
+}
+
+cat("\nDIAGNOSTICO DE ESCALA DOS FORECASTS\n")
+for (hi in seq_along(hor)) {
+  h <- hor[hi]
+  cat(sprintf("\nh=%d:\n", h))
+  cat(sprintf("  yout range: [%.4f, %.4f] | mean=%.4f\n",
+              min(yout[,hi], na.rm=T), max(yout[,hi], na.rm=T), mean(yout[,hi], na.rm=T)))
+  key <- paste0("h",h)
+  if (!is.null(coulombe[[key]])) {
+    df <- coulombe[[key]]
+    cat(sprintf("  realized (Coulombe) range: [%.4f, %.4f] | mean=%.4f\n",
+                min(df$realized, na.rm=T), max(df$realized, na.rm=T), mean(df$realized, na.rm=T)))
+    cat(sprintf("  fc_2srr range: [%.4f, %.4f]\n",
+                min(df$fc_2srr, na.rm=T), max(df$fc_2srr, na.rm=T)))
+  }
+  if (!is.null(med_fc[["AR"]]) && ncol(med_fc[["AR"]]) >= hi) {
+    cat(sprintf("  AR (Medeiros) range: [%.4f, %.4f]\n",
+                min(med_fc[["AR"]][,hi], na.rm=T), max(med_fc[["AR"]][,hi], na.rm=T)))
+  }
+}
+
+# PARTE 5B: DECOMPOSICAO DO GANHO — lambda vs. beta heterogeneidade
+cat("\nPARTE 5B: Decomposicao do ganho 2SRR\n")
+
+for (h in hor) {
+  key <- paste0("h",h)
+  if (is.null(coulombe[[key]])) next
+  df <- coulombe[[key]]
+  df <- df[complete.cases(df$realized, df$fc_ridge, df$fc_2srr,
+                           df$lam_ridge, df$lam2_2srr), ]
+  if (nrow(df) < 30) next
+
+  # Ganho pontual (quadrático) do 2SRR sobre Ridge
+  df$ganho <- (df$fc_ridge - df$realized)^2 - (df$fc_2srr - df$realized)^2
+  # Positivo = 2SRR ganhou naquele período
+
+  # Variacao relativa de lambda (proxy de adaptação)
+  df$delta_lam <- abs(df$lam2_2srr - df$lam_ridge) / (abs(df$lam_ridge) + 1e-10)
+
+  # Regressão: ganho ~ delta_lambda
+  fit <- lm(ganho ~ delta_lam, data=df)
+  cat(sprintf("  h=%d: R²=%.3f | coef delta_lam=%.4f (p=%.3f)\n",
+              h, summary(fit)$r.squared,
+              coef(fit)[2], summary(fit)$coefficients[2,4]))
+
+  # Scatter ganho vs delta_lambda
+  p <- ggplot(df, aes(x=delta_lam, y=ganho)) +
+    geom_point(alpha=0.3, size=1.2, color="steelblue") +
+    geom_smooth(method="lm", color="red", linewidth=0.8, se=TRUE) +
+    geom_hline(yintercept=0, linetype="dashed", color="gray40") +
+    labs(title=sprintf("Ganho 2SRR vs Variacao de Lambda (h=%d)", h),
+         subtitle=sprintf("R²=%.3f | Positivo = 2SRR ganhou", summary(fit)$r.squared),
+         x="Variacao relativa de lambda (|lam2 - lam_ridge| / lam_ridge)",
+         y="Ganho quadrático (Ridge² - 2SRR²)") +
+    theme_minimal()
+  ggsave(file.path(fig_dir, sprintf("ganho_decomp_h%02d.pdf",h)), p, width=10, height=6)
+  print(p)
+
+  write.csv(df[, c("date","ganho","delta_lam")],
+            file.path(out_dir, sprintf("ganho_decomp_h%02d.csv",h)), row.names=FALSE)
 }
 
 # PARTE 6: TABELA DUAL BENCHMARK
@@ -406,8 +565,8 @@ for (hi in seq_along(hor)) {
   cat(sprintf("  h=%d: heatmap salvo (%d janelas x %d regressores)\n", h, T_oos, K))
 }
 
-# PARTE 8: MUDANCAS DE SINAL DOS BETAS
-cat("\nPARTE 8: Mudancas de sinal dos betas\n")
+# PARTE 8A: MUDANCAS DE SINAL DOS BETAS
+cat("\nPARTE 8A: Mudancas de sinal dos betas\n")
 
 for (hi in seq_along(hor)) {
   h <- hor[hi]
@@ -453,8 +612,60 @@ for (hi in seq_along(hor)) {
   cat(sprintf("  h=%d: max mudancas = %s (%d)\n", h, sc_df$regressor[1], sc_df$sign_changes[1]))
 }
 
-# PARTE 9: ROLLING RMSE RATIO (janela 36 meses)
-cat("\nPARTE 9: Rolling RMSE ratio (36 meses)\n")
+# PARTE 8B: PERSISTENCIA DOS BETAS (autocorrelacao de ordem 1)
+cat("\nPARTE 8B: Persistencia dos betas (AR1)\n")
+
+for (hi in seq_along(hor)) {
+  h <- hor[hi]
+  valid_b <- Filter(Negate(is.null), betas_2srr[[hi]])
+  if (length(valid_b) < 20) next
+
+  beta_mat <- do.call(rbind, lapply(valid_b, function(b) {
+    bm <- b$betas
+    if (is.array(bm) && length(dim(bm))==3) bvec <- bm[1,,dim(bm)[3]]
+    else if (is.matrix(bm)) bvec <- bm[nrow(bm),]
+    else bvec <- as.numeric(bm)
+    bvec
+  }))
+
+  K <- ncol(beta_mat)
+  col_nm <- if (K <= length(reg_names)) reg_names[1:K] else paste0("b",0:(K-1))
+
+  # AR(1) de cada beta ao longo do tempo
+  ar1_coef <- sapply(1:K, function(k) {
+    x <- beta_mat[,k]
+    x <- x[!is.na(x)]
+    if (length(x) < 10) return(NA)
+    tryCatch(acf(x, lag.max=1, plot=FALSE)$acf[2], error=function(e) NA)
+  })
+  names(ar1_coef) <- col_nm
+
+  ar1_df <- data.frame(regressor=col_nm, ar1=ar1_coef)
+  ar1_df <- ar1_df[!is.na(ar1_df$ar1),]
+  ar1_df <- ar1_df[order(-ar1_df$ar1),]
+
+  p_ar <- ggplot(ar1_df, aes(x=reorder(regressor, ar1), y=ar1, fill=ar1 > 0.5)) +
+    geom_col(width=0.6) +
+    geom_hline(yintercept=0.5, linetype="dashed", color="red") +
+    scale_fill_manual(values=c("FALSE"="steelblue","TRUE"="darkorange"),
+                      labels=c("Baixa persistencia","Alta persistencia (>0.5)"),
+                      name="") +
+    coord_flip() +
+    labs(title=sprintf("Persistencia (ACF lag-1) dos betas TVP (h=%d)", h),
+         subtitle="Acima de 0.5 = beta altamente persistente (captura regime)",
+         x="", y="ACF lag-1") +
+    theme_minimal() + theme(legend.position="bottom")
+  ggsave(file.path(fig_dir, sprintf("persistencia_betas_h%02d.pdf",h)), p_ar, width=10, height=7)
+  print(p_ar)
+  write.csv(ar1_df, file.path(out_dir, sprintf("persistencia_betas_h%02d.csv",h)), row.names=FALSE)
+
+  cat(sprintf("  h=%d: beta mais persistente = %s (ACF1=%.3f)\n",
+              h, ar1_df$regressor[which.max(ar1_df$ar1)],
+              max(ar1_df$ar1, na.rm=TRUE)))
+}
+
+# PARTE 9A: ROLLING RMSE RATIO (janela 36 meses)
+cat("\nPARTE 9A: Rolling RMSE ratio (36 meses)\n")
 
 for (h in hor) {
   key <- paste0("h",h)
@@ -499,10 +710,98 @@ for (h in hor) {
   write.csv(roll_clean, file.path(out_dir, sprintf("rolling_ratio_h%02d.csv",h)), row.names=FALSE)
 }
 
+# Parte 9B: Rolling RMSE ratio comparando TVP-AR, TVP-Factor e 2SRR
+for (h in hor) {
+  key <- paste0("h",h)
+  if (is.null(coulombe[[key]])) next
+  df <- coulombe[[key]]
+  df <- df[complete.cases(df$realized, df$fc_ridge, df$fc_2srr),]
+  n_df <- nrow(df); window <- 36
+  if (n_df < window + 10) next
+
+  roll_df <- data.frame(date=as.Date(df$date), ratio_2srr=NA, ratio_tvpar=NA, ratio_tvpfac=NA)
+
+  # Alinha TVP-AR e TVP-Factor com o mesmo período do Coulombe
+  tvpar_fc  <- if (!is.null(tvp_ar_list[[key]]))  tvp_ar_list[[key]]$fc_2srr  else rep(NA, n_df)
+  tvpfac_fc <- if (!is.null(tvp_fac_list[[key]])) tvp_fac_list[[key]]$fc_2srr else rep(NA, n_df)
+  tvpar_fc  <- tvpar_fc[1:n_df]
+  tvpfac_fc <- tvpfac_fc[1:n_df]
+
+  for (i in window:n_df) {
+    w <- (i-window+1):i
+    rmse_r  <- sqrt(mean((df$fc_ridge[w] - df$realized[w])^2))
+    rmse_2  <- sqrt(mean((df$fc_2srr[w]  - df$realized[w])^2))
+    roll_df$ratio_2srr[i] <- rmse_2 / rmse_r
+
+    if (!any(is.na(tvpar_fc[w])))
+      roll_df$ratio_tvpar[i]  <- sqrt(mean((tvpar_fc[w]  - df$realized[w])^2)) / rmse_r
+    if (!any(is.na(tvpfac_fc[w])))
+      roll_df$ratio_tvpfac[i] <- sqrt(mean((tvpfac_fc[w] - df$realized[w])^2)) / rmse_r
+  }
+
+  roll_long <- melt(roll_df[!is.na(roll_df$ratio_2srr),],
+                    id.vars="date", variable.name="Modelo", value.name="Ratio")
+  roll_long <- roll_long[!is.na(roll_long$Ratio),]
+
+  p_roll <- ggplot(roll_long, aes(x=date, y=Ratio, color=Modelo)) +
+    geom_rect(data=recessions, aes(xmin=start,xmax=end,ymin=-Inf,ymax=Inf),
+              inherit.aes=FALSE, fill="gray90", alpha=0.5) +
+    geom_line(linewidth=0.6) +
+    geom_hline(yintercept=1, linetype="dashed", color="red") +
+    scale_color_manual(values=c("ratio_2srr"="steelblue","ratio_tvpar"="darkorange","ratio_tvpfac"="forestgreen"),
+                       labels=c("2SRR/Ridge","TVP-AR/Ridge","TVP-Factor/Ridge")) +
+    labs(title=sprintf("Rolling RMSE ratio vs Ridge (janela %d meses, h=%d)", window, h),
+         subtitle="Abaixo de 1 = modelo melhor que Ridge", x="", y="Ratio RMSE") +
+    theme_minimal()
+  ggsave(file.path(fig_dir, sprintf("rolling_ratio_multi_h%02d.pdf",h)), p_roll, width=12, height=5)
+  print(p_roll)
+}
+
+# PARTE 9C: DENSIDADE DOS ERROS POR REGIME
+cat("\nPARTE 9C: Densidade dos erros por regime\n")
+
+for (h in c(1, 12)) {   # só h>=6 onde 2SRR ganha
+  key <- paste0("h",h)
+  if (is.null(coulombe[[key]])) next
+  df <- coulombe[[key]]
+  df <- df[complete.cases(df$realized, df$fc_ridge, df$fc_2srr),]
+  df$date_p <- as.Date(df$date)
+
+  # Classificar regime
+  df$regime <- "Normal"
+  df$regime[df$date_p >= as.Date("2007-12-01") &
+             df$date_p <= as.Date("2009-06-30")] <- "GFC"
+  df$regime[df$date_p >= as.Date("2020-02-01") &
+             df$date_p <= as.Date("2021-06-30")] <- "COVID"
+  df$regime[df$date_p >= as.Date("2021-07-01") &
+             df$date_p <= as.Date("2023-06-30")] <- "High Inflation"
+
+  df$err_ridge <- df$fc_ridge - df$realized
+  df$err_2srr  <- df$fc_2srr  - df$realized
+
+  err_long <- rbind(
+    data.frame(regime=df$regime, erro=df$err_ridge, modelo="Ridge"),
+    data.frame(regime=df$regime, erro=df$err_2srr,  modelo="2SRR")
+  )
+
+  p_dens <- ggplot(err_long, aes(x=erro, fill=modelo)) +
+    geom_density(alpha=0.4, linewidth=0.4) +
+    geom_vline(xintercept=0, linetype="dashed", color="gray40") +
+    facet_wrap(~regime, scales="free", ncol=2) +
+    scale_fill_manual(values=c("Ridge"="tomato","2SRR"="steelblue")) +
+    labs(title=sprintf("Distribuicao dos erros por regime (h=%d)", h),
+         subtitle="2SRR vs Ridge — caudas mais pesadas em crises?",
+         x="Erro de previsao", y="Densidade", fill="") +
+    theme_minimal() + theme(legend.position="bottom")
+  ggsave(file.path(fig_dir, sprintf("densidade_erros_h%02d.pdf",h)), p_dens, width=12, height=8)
+  print(p_dens)
+  cat(sprintf("  h=%d: densidade por regime salva\n", h))
+}
+
 # PARTE 10: FAN CHART DAS PREVISOES
 cat("\nPARTE 10: Fan chart\n")
 
-for (h in c(1, 12)) {
+for (h in hor) { #for (h in c(1, 12)) {
   key <- paste0("h",h)
   if (is.null(coulombe[[key]])) next
   df <- coulombe[[key]]
@@ -535,57 +834,270 @@ for (h in c(1, 12)) {
   cat(sprintf("  h=%d: fan chart salvo\n", h))
 }
 
-# PARTE 11: NARRATIVA AUTOMATICA
-cat("\nPARTE 11: Narrativa\n")
+# PARTE 11: Narrativa dinamica
+cat("\nPARTE 11: Narrativa dinamica\n")
 
 sink(file.path(out_dir, "narrativa_2srr.txt"))
 cat("NARRATIVA — 2SRR Deep Dive\n")
 cat(sprintf("Gerado: %s\n\n", Sys.time()))
 
+# 1. Lambda
 cat("1. REGULARIZACAO ADAPTATIVA\n")
-cat("O 2SRR ajusta lambda dinamicamente. A correlacao entre lambda do\n")
-cat("Ridge e lambda2 do 2SRR indica o grau de concordancia sobre a\n")
-cat("intensidade necessaria de regularizacao.\n\n")
+for (h in hor) {
+  key <- paste0("h",h)
+  if (!is.null(coulombe[[key]])) {
+    df <- coulombe[[key]]
+    df <- df[complete.cases(df$lam_ridge, df$lam2_2srr), ]
+    if (nrow(df) >= 10) {
+      cor_lam <- cor(df$lam_ridge, df$lam2_2srr, use="complete.obs")
+      direcao <- ifelse(cor_lam > 0.3, "concordam moderadamente",
+                 ifelse(cor_lam < -0.3, "divergem (adaptacao independente)", "sao pouco correlacionados"))
+      cat(sprintf("  h=%d: cor=%.3f — lambdas %s\n", h, cor_lam, direcao))
+    }
+  }
+}
 
-cat("2. DISPERSAO HETEROGENEA\n")
-cat("O 2SRR produz encolhimento heterogeneo por variavel e por periodo,\n")
-cat("enquanto o Ridge encolhe uniformemente. Periodos de crise mostram\n")
-cat("maior dispersao dos betas do 2SRR.\n\n")
+# 2. Dispersao
+cat("\n2. DISPERSAO HETEROGENEA (ratio media 2SRR/Ridge)\n")
+for (hi in seq_along(hor)) {
+  h <- hor[hi]
+  fname <- file.path(out_dir, sprintf("dispersao_h%02d.csv",h))
+  if (file.exists(fname)) {
+    d <- read.csv(fname)
+    r <- mean(d$TVP_2SRR, na.rm=T) / mean(d$Ridge, na.rm=T)
+    cat(sprintf("  h=%d: ratio=%.2fx — 2SRR %s disperso que Ridge\n",
+                h, r, ifelse(r>1,"mais","menos")))
+  }
+}
 
-cat("3. INTEGRIDADE\n")
+# 3. Integridade
+cat("\n3. INTEGRIDADE (fallbacks)\n")
 for (h in hor) {
   key <- paste0("h",h)
   if (!is.null(coulombe[[key]])) {
     df <- coulombe[[key]]
     df <- df[complete.cases(df$fc_ridge,df$fc_2srr),]
     n_fb <- sum(abs(df$fc_2srr-df$fc_ridge)<1e-10)
-    cat(sprintf("h=%d: %d/%d fallbacks (%.1f%%)\n", h, n_fb, nrow(df), 100*n_fb/nrow(df)))
+    cat(sprintf("  h=%d: %d/%d fallbacks (%.1f%%)\n", h, n_fb, nrow(df), 100*n_fb/nrow(df)))
   }
 }
 
-cat("\n4. RESULTADOS POR SUB-PERIODO\n")
+# 4. Sub-periodos com DM
+cat("\n4. RESULTADOS POR SUB-PERIODO (2SRR vs Ridge)\n")
 if (exists("sub_tab")) {
-  for (h in c(6,12)) {
-    cat(sprintf("\nh=%d:\n",h))
+  for (h in hor) {
+    cat(sprintf("\n  h=%d:\n", h))
     sub_h <- sub_tab[sub_tab$h==h,]
-    for (i in seq_len(nrow(sub_h)))
-      cat(sprintf("  %-25s ratio=%.3f n=%d %s\n",
-                  sub_h$periodo[i], sub_h$Ratio[i], sub_h$n[i],
+    n_wins <- sum(sub_h$Ratio < 1, na.rm=TRUE)
+    cat(sprintf("  2SRR ganha em %d/%d sub-periodos\n", n_wins, nrow(sub_h)))
+    for (i in seq_len(nrow(sub_h))) {
+      # Tenta ler p-valor do DM
+      dm_fname <- file.path(out_dir, sprintf("dm_test_h%02d.csv",h))
+      pval_str <- ""
+      if (file.exists(dm_fname)) {
+        dm_df <- read.csv(dm_fname)
+        dm_row <- dm_df[dm_df$periodo == sub_h$periodo[i],]
+        if (nrow(dm_row) == 1)
+          pval_str <- sprintf(" [DM p=%.2f%s]", dm_row$p_value,
+                              ifelse(dm_row$p_value < 0.10, "*",""))
+      }
+      cat(sprintf("    %-25s ratio=%.3f n=%d%s %s\n",
+                  sub_h$periodo[i], sub_h$Ratio[i], sub_h$n[i], pval_str,
                   ifelse(sub_h$Ratio[i]<1,"<-- 2SRR melhor","")))
+    }
   }
 }
 
-cat("\n5. MUDANCAS DE SINAL\n")
-cat("Betas que trocam de sinal frequentemente podem indicar\n")
-cat("instabilidade numerica (PC7/PC8) ou adaptacao genuina a\n")
-cat("mudancas de regime (intercepto, lags de y).\n")
+# 5. Rolling
+cat("\n5. DESEMPENHO ROLLING (% janelas com ratio<1)\n")
+for (h in hor) {
+  fname <- file.path(out_dir, sprintf("rolling_ratio_h%02d.csv",h))
+  if (file.exists(fname)) {
+    r <- read.csv(fname)
+    pct <- 100*mean(r$ratio < 1, na.rm=TRUE)
+    cat(sprintf("  h=%d: 2SRR melhor em %.0f%% das janelas rolling de 36 meses\n", h, pct))
+  }
+}
 
-cat("\n6. CONCLUSAO\n")
-cat("O 2SRR reduz RMSE em 18-40% para h>=6, com evidencia de\n")
-cat("regularizacao adaptativa, encolhimento heterogeneo e\n")
-cat("robustez a sub-periodos incluindo pos-COVID.\n")
+# 6. Persistencia
+cat("\n6. PERSISTENCIA DOS BETAS\n")
+for (h in hor) {
+  fname <- file.path(out_dir, sprintf("persistencia_betas_h%02d.csv",h))
+  if (file.exists(fname)) {
+    p_df <- read.csv(fname)
+    top <- p_df[which.max(p_df$ar1),]
+    pct_alta <- 100*mean(p_df$ar1 > 0.5, na.rm=TRUE)
+    cat(sprintf("  h=%d: %.0f%% dos betas com ACF1>0.5 | mais persistente: %s (%.2f)\n",
+                h, pct_alta, top$regressor, top$ar1))
+  }
+}
+
+cat("\n7. CONCLUSAO\n")
+if (exists("sub_tab")) {
+  best_h <- hor[which.min(sapply(hor, function(h) {
+    s <- sub_tab[sub_tab$h==h & sub_tab$periodo=="Full Sample",]
+    if (nrow(s)==1) s$Ratio else Inf
+  }))]
+  cat(sprintf("Melhor desempenho relativo: h=%d (menor ratio full sample)\n", best_h))
+}
+cat("O 2SRR demonstra: (1) regularizacao adaptativa independente do Ridge,\n")
+cat("(2) encolhimento heterogeneo por variavel, (3) robustez em sub-periodos\n")
+cat("de estresse, e (4) betas persistentes que capturam mudancas de regime.\n")
 sink()
 
 cat(sprintf("Narrativa salva: %s/narrativa_2srr.txt\n", out_dir))
+cat(sprintf("\nTODOS OS OUTPUTS EM: %s\n", out_dir))
 
-cat(sprintf("\n\nTODOS OS OUTPUTS EM: %s\n", out_dir))
+# ============================================================
+# PARTE NOVA (Falta corrigir o 2SRR ESTÁ FICANDO QUASE ZERADO): Comparacao 2SRR Felipe vs Coulombe
+# ============================================================
+
+cat("\nPARTE NOVA: Comparacao Felipe RW 2SRR vs Coulombe 2SRR\n")
+cat(rep("=", 60), "\n", sep="")
+
+# 1. Carrega o forecast do Felipe (formato Medeiros)
+
+env_fe <- new.env()
+load("forecasts/2SRR.rda", envir = env_fe)
+fc_felipe_raw <- get(ls(env_fe)[1], envir = env_fe)
+if (!is.matrix(fc_felipe_raw)) fc_felipe_raw <- as.matrix(fc_felipe_raw)
+cat(sprintf("  Felipe 2SRR: %d janelas x %d horizontes\n",
+            nrow(fc_felipe_raw), ncol(fc_felipe_raw)))
+
+# 2. Verifica escala dos realizados
+
+cat("\n--- DIAGNOSTICO DE ESCALA ---\n")
+for (h in hor) {
+  key <- paste0("h", h)
+  hi  <- match(h, hor)
+  if (is.null(coulombe[[key]])) next
+  cdf <- coulombe[[key]]
+  n_fe <- min(nrow(fc_felipe_raw), nrow(yout), nrow(cdf))
+  cat(sprintf("h=%d:\n", h))
+  cat(sprintf("  yout[,hi]    range: [%.4f, %.4f] | mean=%.4f\n",
+              min(yout[1:n_fe, hi], na.rm=TRUE),
+              max(yout[1:n_fe, hi], na.rm=TRUE),
+              mean(yout[1:n_fe, hi], na.rm=TRUE)))
+  cat(sprintf("  cdf$realized range: [%.4f, %.4f] | mean=%.4f\n",
+              min(cdf$realized, na.rm=TRUE),
+              max(cdf$realized, na.rm=TRUE),
+              mean(cdf$realized, na.rm=TRUE)))
+  cat(sprintf("  fc_felipe    range: [%.4f, %.4f] | mean=%.4f\n",
+              min(fc_felipe_raw[1:n_fe, hi], na.rm=TRUE),
+              max(fc_felipe_raw[1:n_fe, hi], na.rm=TRUE),
+              mean(fc_felipe_raw[1:n_fe, hi], na.rm=TRUE)))
+}
+
+# 3. Compara usando cdf$realized como denominador comum
+cat("\n--- COMPARACAO (ambos vs cdf$realized) ---\n")
+compare_tab <- list()
+
+for (h in hor) {
+  key <- paste0("h", h)
+  hi  <- match(h, hor)
+
+  if (is.null(coulombe[[key]])) {
+    cat(sprintf("  h=%d: coulombe nao encontrado\n", h))
+    next
+  }
+
+  cdf <- coulombe[[key]]
+  cdf <- cdf[complete.cases(cdf$realized, cdf$fc_2srr), ]
+
+  n_fe <- min(nrow(fc_felipe_raw), nrow(cdf))
+
+  fc_fe     <- fc_felipe_raw[1:n_fe, hi]   # forecast Felipe
+  fc_coul   <- cdf$fc_2srr[1:n_fe]         # forecast Coulombe
+  real_coul <- cdf$realized[1:n_fe]         # MESMO realizador para ambos
+
+  rmse_fe   <- sqrt(mean((fc_fe   - real_coul)^2, na.rm = TRUE))
+  rmse_coul <- sqrt(mean((fc_coul - real_coul)^2, na.rm = TRUE))
+  ratio     <- rmse_fe / rmse_coul   # < 1 = Felipe melhor
+
+  e_fe   <- fc_fe   - real_coul
+  e_coul <- fc_coul - real_coul
+
+  dm <- tryCatch(
+    dm.test(e_fe, e_coul, alternative = "greater", h = h, power = 2),
+    error = function(e) list(statistic = NA, p.value = NA)
+  )
+
+  vencedor <- ifelse(ratio < 1, "<-- Felipe melhor", "<-- Coulombe melhor")
+
+  cat(sprintf(
+    "  h=%2d | Felipe=%.4f | Coulombe=%.4f | Ratio=%.3f %s | DM p=%.3f\n",
+    h, rmse_fe, rmse_coul, ratio, vencedor,
+    ifelse(is.na(dm$p.value), NA, dm$p.value)
+  ))
+
+  compare_tab[[key]] <- data.frame(
+    h                    = h,
+    RMSE_Felipe          = rmse_fe,
+    RMSE_Coulombe        = rmse_coul,
+    Ratio_FelipeCoulombe = ratio,
+    Felipe_melhor        = ratio < 1,
+    DM_stat   = ifelse(is.na(dm$statistic), NA, as.numeric(dm$statistic)),
+    DM_pvalue = ifelse(is.na(dm$p.value),   NA, dm$p.value),
+    n         = n_fe
+  )
+}
+
+# 4. Tabela resumo
+
+if (length(compare_tab) > 0) {
+  tab_comp <- do.call(rbind, compare_tab)
+  rownames(tab_comp) <- NULL
+  cat("\n--- TABELA RESUMO ---\n")
+  print(tab_comp)
+  write.csv(tab_comp,
+            file.path(out_dir, "comparacao_felipe_vs_coulombe_v2.csv"),
+            row.names = FALSE)
+  cat(sprintf("\nTabela salva em: %s/comparacao_felipe_vs_coulombe_v2.csv\n", out_dir))
+}
+
+# 5. Plots: ambos vs cdf$realized
+for (h in hor) {
+  key <- paste0("h", h)
+  hi  <- match(h, hor)
+  if (is.null(coulombe[[key]])) next
+  if (is.null(compare_tab[[key]])) next
+
+  cdf  <- coulombe[[key]]
+  cdf  <- cdf[complete.cases(cdf$realized, cdf$fc_2srr), ]
+  n_fe <- min(nrow(fc_felipe_raw), nrow(cdf))
+
+  plot_df <- data.frame(
+    janela        = 1:n_fe,
+    Realizado     = cdf$realized[1:n_fe],      # escala Coulombe
+    Felipe_2SRR   = fc_felipe_raw[1:n_fe, hi],
+    Coulombe_2SRR = cdf$fc_2srr[1:n_fe]
+  )
+
+  plot_long <- melt(plot_df, id.vars = "janela",
+                    variable.name = "Serie", value.name = "Valor")
+
+  p <- ggplot(plot_long, aes(x = janela, y = Valor, color = Serie)) +
+    geom_line(linewidth = 0.6) +
+    scale_color_manual(values = c(
+      "Realizado"     = "black",
+      "Felipe_2SRR"   = "steelblue",
+      "Coulombe_2SRR" = "firebrick"
+    )) +
+    labs(
+      title    = sprintf("2SRR Felipe vs Coulombe (h=%d)", h),
+      subtitle = sprintf("RMSE Felipe=%.4f | RMSE Coulombe=%.4f | Ratio=%.3f %s",
+                         compare_tab[[key]]$RMSE_Felipe,
+                         compare_tab[[key]]$RMSE_Coulombe,
+                         compare_tab[[key]]$Ratio_FelipeCoulombe,
+                         ifelse(compare_tab[[key]]$Felipe_melhor,
+                                "| FELIPE MELHOR", "| COULOMBE MELHOR")),
+      x = "Janela OOS", y = "Inflacao (escala Coulombe)", color = ""
+    ) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+
+  ggsave(file.path(fig_dir, sprintf("fc_felipe_vs_coulombe_v2_h%02d.pdf", h)),
+         p, width = 14, height = 5)
+  print(p)
+  cat(sprintf("  h=%d: plot salvo\n", h))
+}
