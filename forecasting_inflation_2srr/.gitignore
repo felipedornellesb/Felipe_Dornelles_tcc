@@ -1,0 +1,11 @@
+.Rhistory
+.RData
+.Rproj.user
+10_data/*.rda
+30_output/**/*.rda
+40_results/tables/*.csv
+40_results/tables/*.tex
+40_results/figures/*.pdf
+20_tools/21_coulombe/*.R
+20_tools/22_medeiros/*.R
+.DS_Store
