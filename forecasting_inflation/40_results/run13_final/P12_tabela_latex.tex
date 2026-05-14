@@ -1,0 +1,18 @@
+\begin{table}[ht]
+\centering
+\caption{RMSFE Relativo ao Random Walk — Inflacao CPI (EUA)}
+\label{tab:rmsfe_rw}
+\begin{tabular}{ccccccccc}
+\hline\hline
+h & AR & Ridge & LASSO & AdaLASSO & RF & factor & CSR & Bagging \\
+\hline
+1 & 0.905 & 0.905 & 0.832 & 0.862 & 0.882 & 0.884 & 0.847 & 0.932 \\
+3 & 1.076 & 1.087 & 1.081 & 1.081 & 1.096 & 1.061 & 1.087 & 1.119 \\
+6 & 1.014 & 1.016 & 1.016 & 1.014 & 1.019 & 1.017 & 1.016 & 1.016 \\
+12 & 1.001 & 1.001 & 1.001 & 1.001 & 1.001 & 1.001 & 1.001 & 1.001 \\
+\hline\hline
+\end{tabular}
+\begin{flushleft}
+\footnotesize Nota: Valores $< 1$ indicam modelo superior ao Random Walk.
+\end{flushleft}
+\end{table}

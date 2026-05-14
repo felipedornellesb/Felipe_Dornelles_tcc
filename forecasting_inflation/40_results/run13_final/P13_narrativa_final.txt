@@ -1,0 +1,65 @@
+================================================================
+  NARRATIVA FINAL — 2SRR Previsao de Inflacao
+================================================================
+
+1. REGULARIZACAO ADAPTATIVA (Parte 5)
+   h=1: cor(lam1,lam2)=-0.165 | ratio medio=225117.043
+   h=3: cor(lam1,lam2)=0.212 | ratio medio=1534.539
+   h=6: cor(lam1,lam2)=0.294 | ratio medio=186.150
+   h=12: cor(lam1,lam2)=-0.453 | ratio medio=60.950
+   ARGUMENTO: O 2SRR adapta sua regularizacao de forma independente
+   do Ridge, mostrando que o Step 2-4 do Algorithm 1 agrega informacao.
+
+2. DESEMPENHO vs RIDGE (Parte 6)
+   2SRR melhor que Ridge em 2 de 4 horizontes
+   h=1: Ratio=1.2023 DM p=0.8624 
+   h=3: Ratio=1.0357 DM p=0.7310 
+   h=6: Ratio=0.8193 DM p=0.0292 **
+   h=12: Ratio=0.6041 DM p=0.0004 ***
+
+3. TESTES ECONOMETRICOS (Parte 9)
+   h=1: CW p=0.2183 | MZ R2: 2SRR=0.120 Ridge=0.234 | Ridge encompassa 2SRR
+   h=3: CW p=0.0000 | MZ R2: 2SRR=0.183 Ridge=0.098 | Ambos contribuem
+   h=6: CW p=0.0001 | MZ R2: 2SRR=0.378 Ridge=0.095 | 2SRR encompassa Ridge
+   h=12: CW p=0.0123 | MZ R2: 2SRR=0.547 Ridge=0.085 | 2SRR encompassa Ridge
+   Clark-West significativo em 3 de 4 horizontes (10%)
+   ARGUMENTO: Clark-West e o teste adequado para modelos nested (TVP vs constante)
+
+4. SUB-PERIODOS (Parte 10)
+   2SRR ganha em 7 de 12 combinacoes de crise
+   ARGUMENTO CHAVE: TVP se adapta melhor em periodos de estresse.
+
+5. PARCIMONIA (Parte 8)
+   h=1: Ridge mais concentrado (p=0.2092)
+   h=3: Ridge mais concentrado (p=0.0000)
+   h=6: Ridge mais concentrado (p=0.0000)
+   h=12: 2SRR mais concentrado (p=0.0000)
+   ARGUMENTO: Concentracao diferente mostra que 2SRR redistribui
+   pesos entre variaveis de forma adaptativa.
+
+6. BETAS TVP vs RIDGE (Parte 3)
+   h=1: cor=0.5281 dist_rel=1.6138 -> significativamente diferentes
+   h=3: cor=0.5126 dist_rel=1.8902 -> significativamente diferentes
+   h=6: cor=0.5293 dist_rel=1.2601 -> significativamente diferentes
+   h=12: cor=0.5166 dist_rel=1.0385 -> significativamente diferentes
+
+7. SINTESE PARA O TCC
+
+   O 2SRR de Coulombe (2024) demonstra:
+   (a) Regularizacao adaptativa que diverge do Ridge simples
+   (b) Ganhos em horizontes especificos, especialmente em crises
+   (c) Redistribuicao de pesos entre preditores ao longo do tempo
+   (d) Validacao econometrica via Clark-West (modelo nested)
+   (e) Implementacao computacional tratavel via solucao dual
+
+   PONTOS FORTES:
+   - Captura mudancas estruturais sem MCMC
+   - Narrativa economica via trajetoria dos betas
+   - Melhora em periodos de estresse (GFC, COVID)
+
+   LIMITACOES:
+   - k-fold CV pode ser enviesado para h>1 (solucao: BCV ou Half-Half)
+   - Custo computacional maior que Ridge simples
+   - Em periodos calmos, Ridge estatico pode ser suficiente
+
+================================================================

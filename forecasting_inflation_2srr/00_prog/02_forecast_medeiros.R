@@ -7,7 +7,7 @@ source("00_prog/00_setup.R")
 load(file.path(DIR_DATA, "data.rda"))
 
 variable <- "CPIAUCSL"
-nwindows <- 180
+horizons <- c(1, 3, 6, 12)
 maxh     <- 12
 
 # CRITICAL: remove date column (embed() and model functions require numeric)
@@ -45,24 +45,37 @@ for (m in all_models) {
   t0 <- Sys.time()
   
   forecasts_mat <- matrix(NA_real_, nwindows, maxh)
-  for (h in 1:maxh) {
+  betas_bundle <- list()
+  
+  for (h in horizons) {
     cat(sprintf("    h=%2d...", h))
+    
+    # Direct forecasting: create cumulative target for horizon h
+    data_h <- data
+    y_h <- as.numeric(stats::filter(data[[variable]], rep(1, h), sides = 1))
+    if (h > 1) y_h[1:(h-1)] <- y_h[h]
+    data_h[[variable]] <- y_h
+    
     tryCatch({
-      result <- rolling_window(get(m$fn), data, nwindows, h, variable)
+      result <- rolling_window(get(m$fn), data_h, nwindows, h, variable)
       forecasts_mat[, h] <- result$forecast
+      betas_bundle[[paste0("h", h)]] <- result$outputs
       cat(" done.\n")
     }, error = function(e) cat(sprintf(" FAILED: %s\n", e$message)))
   }
   
   tryCatch({
-    if (exists("accumulate_model", mode = "function"))
-      forecasts <- accumulate_model(forecasts_mat)
-    else
-      forecasts <- forecasts_mat
-      
+    forecasts <- forecasts_mat
+    colnames(forecasts) <- paste0("h", 1:maxh)
     save(forecasts, file = out_path)
+    
+    # Save the betas and lambdas bundle
+    if (length(betas_bundle) > 0) {
+      save(betas_bundle, file = file.path(DIR_BETAS, paste0("betas_", m$name, ".rda")))
+    }
+    
     cat(sprintf("  %-12s %.1f min\n", m$name, difftime(Sys.time(), t0, units = "mins")))
-  }, error = function(e) cat(sprintf(" FAILED to accumulate/save: %s\n", e$message)))
+  }, error = function(e) cat(sprintf(" FAILED to save: %s\n", e$message)))
 }
 
 cat("== done ==\n")

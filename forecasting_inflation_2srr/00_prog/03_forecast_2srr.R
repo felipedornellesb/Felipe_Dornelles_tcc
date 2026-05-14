@@ -10,7 +10,7 @@ source("00_prog/00_setup.R")
 load(file.path(DIR_DATA, "data.rda"))
 
 variable <- "CPIAUCSL"
-nwindows <- 180
+horizons <- c(1, 3, 6, 12)
 maxh     <- 12
 
 # Remove date column
@@ -25,14 +25,20 @@ if (file.exists(out_path)) {
 } else {
   model_list <- vector("list", maxh)
 
-  for (h in 1:maxh) {
+  for (h in horizons) {
     cat(sprintf("  h=%2d: %d windows...", h, nwindows))
     t0 <- Sys.time()
+
+    # Direct forecasting: create cumulative target for horizon h
+    data_h <- data
+    y_h <- as.numeric(stats::filter(data[[variable]], rep(1, h), sides = 1))
+    if (h > 1) y_h[1:(h-1)] <- y_h[h]
+    data_h[[variable]] <- y_h
 
     tryCatch({
       model_list[[h]] <- rolling_window(
         fn       = run2srr,
-        df       = data,
+        df       = data_h,
         nwindow  = nwindows,
         horizon  = h,
         variable = variable,
@@ -52,21 +58,18 @@ if (file.exists(out_path)) {
 
   # Assemble forecast matrix
   forecasts <- matrix(NA_real_, nwindows, maxh)
-  for (h in 1:maxh) {
+  for (h in horizons) {
     fc <- model_list[[h]]$forecast
     forecasts[1:min(length(fc), nwindows), h] <- fc[1:min(length(fc), nwindows)]
   }
   colnames(forecasts) <- paste0("h", 1:maxh)
-
-  if (exists("accumulate_model", mode = "function"))
-    forecasts <- accumulate_model(forecasts)
 
   save(forecasts, file = out_path)
   cat(sprintf("  Saved %s\n", basename(out_path)))
 
   # Extract betas
   betas_bundle <- list()
-  for (h in 1:maxh) {
+  for (h in horizons) {
     ml <- model_list[[h]]
     if (is.null(ml$outputs)) next
     betas_h  <- vector("list", length(ml$outputs))
