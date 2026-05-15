@@ -12,8 +12,12 @@ rownames(data) = as.character(dates)
 
 nwindows = 312
 
+# CPIAUCSL is 100 * log_diff(CPI), i.e. monthly inflation in pp. Log diffs are
+# additive, so h-period accumulated inflation is the SUM. The previous
+# roll_prod(1+y,h)-1 treated pp as a multiplicative gross return, inflating the
+# target exponentially (RW RMSE at h=12 was ~72 instead of ~2).
 y = data[,"CPIAUCSL"]
-y = cbind(y,roll_prod(1+y,3)-1,roll_prod(1+y,6)-1,roll_prod(1+y,12)-1)
+y = cbind(y,roll_sum(y,3),roll_sum(y,6),roll_sum(y,12))
 yout = tail(y,nwindows)
 
 rw = matrix(NA,nwindows,12)

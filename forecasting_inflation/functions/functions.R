@@ -317,15 +317,18 @@ runtfact=function(ind,df,variable,horizon){
 }
 
 accumulate_model = function(forecasts){
-  
+  # Forecasts are log_diff inflation in pp; accumulation is SUM, not product.
+  # The previous prod(1+...)-1 form bloated multi-period RMSEs and made the
+  # acc3/acc6/acc12 columns incomparable with the Coulombe pipeline (which
+  # already uses sum-based Y_h).
   acc3 = c(rep(NA,2),sapply(1:(nrow(forecasts)-2), function(x){
-    prod(1+diag(forecasts[x:(x+2),1:3]))-1
-  })) 
+    sum(diag(forecasts[x:(x+2),1:3]))
+  }))
   acc6 = c(rep(NA,5),sapply(1:(nrow(forecasts)-5), function(x){
-    prod(1+diag(forecasts[x:(x+5),1:6]))-1
+    sum(diag(forecasts[x:(x+5),1:6]))
   }))
   acc12 = c(rep(NA,11),sapply(1:(nrow(forecasts)-11), function(x){
-    prod(1+diag(forecasts[x:(x+11),1:12]))-1
+    sum(diag(forecasts[x:(x+11),1:12]))
   }))
   
   forecasts = cbind(forecasts,acc3,acc6,acc12)
